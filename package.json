@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "ts-node jackal.ts",
+    "dev": "ts-node-dev jackal.ts"
   },
   "keywords": [],
   "author": "",
@@ -12,6 +15,11 @@
   "description": "",
   "dependencies": {
     "@jackallabs/jackal.js": "^3.6.1",
-    "amqplib": "^0.10.5"
+    "amqplib": "^0.10.5",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.16",
+    "typescript": "^5.8.2"
   }
 }
