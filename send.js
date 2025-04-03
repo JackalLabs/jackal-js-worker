@@ -27,12 +27,14 @@ if (require.main === module) {
 
       function askForMessage() {
         rl.question('Enter filename to send (or "exit" to quit): ', (msg) => {
-          if (msg.toLowerCase() === "exit") {
+          if (!msg || msg.trim() === "" || msg === "/") {
+            console.log('Please enter a filename or "exit" to quit.');
+            askForMessage();
+          } else if (msg.toLowerCase() === "exit") {
             connection.close();
             rl.close();
             process.exit(0);
           }
-
           channel.sendToQueue(queue, Buffer.from(msg));
           console.log(`[x] Sent ${msg}`);
           askForMessage();

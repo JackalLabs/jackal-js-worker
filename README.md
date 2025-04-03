@@ -53,7 +53,11 @@ This will:
 
 ## Usage
 
-### Starting the Receiver
+### Starting the Receiver(Jackal Worker)
+
+To run multiple Jackal workers, you can run multiple instances of the `receive.js` script with different key environment variables.
+
+If the second variable is not provided, it will default to `JKL_SECRET_KEY1`.
 
 ```
 node receive.js
