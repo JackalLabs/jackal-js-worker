@@ -12,10 +12,8 @@ import { testnet } from "./config";
 export const BASE_JACKAL_FOLDER = "test";
 
 dotenv.config();
-export async function openFolder(
-  path: string,
-  count: number = 0
-): Promise<void> {
+
+async function openFolder(path: string, count: number = 0): Promise<void> {
   if (count >= 10) {
     throw new Error(`Failed to open folder after 10 attempts: ${path}`);
   }
@@ -23,6 +21,7 @@ export async function openFolder(
   try {
     await storageHandler.loadDirectory({ path });
   } catch (error) {
+    console.error(error);
     console.log("Failed to load folder, trying again", path);
     await new Promise((resolve) => setTimeout(resolve, 1000));
     return openFolder(path, count + 1);
