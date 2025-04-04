@@ -1,161 +1,71 @@
 const amqp = require("amqplib/callback_api");
-const fs = require("fs").promises;
+const { initJackalClients } = require("./dist/src/jackalClient");
 const path = require("path");
-const {
-  initJackalClients,
-  simpleUploadFile,
-  BASE_JACKAL_FOLDER,
-} = require("./dist/src/jackal");
+const fs = require("fs");
 
 const keyEnvVar = process.argv[2] || "JKL_SECRET_KEY1";
-
 const QUEUE_NAME = "queue1";
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
 
-let jackalInitialized = false;
-let storageHandler;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function initializeJackal() {
-  try {
-    const handlers = await initJackalClients(keyEnvVar);
-    jackalInitialized = true;
+const uploadFile = async (filename, storageHandler) => {
+  let retries = 0;
 
-    // Store the storage handler for later use
-    if (handlers && handlers.storageHandler) {
-      storageHandler = handlers.storageHandler;
-      console.log("Successfully captured storage handler reference");
-    } else {
-      console.warn("Storage handler not returned from initJackalClients");
-    }
-
-    console.log(`Initialized Jackal client with key from ${keyEnvVar}`);
-  } catch (error) {
-    console.error("Failed to initialize Jackal client:", error);
-  }
-}
-
-async function checkStoragePlan() {
-  if (!storageHandler) {
-    console.error("Storage handler not available, cannot check storage plan");
-    return false;
-  }
-
-  try {
-    console.log("Checking storage plan status...");
+  while (retries < MAX_RETRIES) {
     try {
-      await storageHandler.upgradeSigner();
-      console.log("Successfully upgraded signer capabilities");
-    } catch (signerError) {
-      console.error("Error upgrading signer:", signerError.message);
-      return false; // Don't continue if we can't upgrade the signer
-    }
-
-    // Check plan status
-    let planStatus;
-    try {
-      planStatus = await storageHandler.planStatus();
-      console.log("Storage plan status:", JSON.stringify(planStatus, null, 2));
-
-      if (planStatus && planStatus.active) {
-        console.log("Active storage plan found");
-        return true;
-      }
-    } catch (statusError) {
-      console.error("Error checking plan status:", statusError.message);
-      // Continue to purchase a plan if we can't check status
-    }
-
-    console.log(
-      "No active storage plan found. Attempting to purchase a storage plan..."
-    );
-
-    // Try to purchase a storage plan
-    try {
-      const result = await storageHandler.purchaseStoragePlan({
-        gb: 1,
-        days: 30,
-      });
-      console.log(
-        "Storage plan purchased successfully:",
-        JSON.stringify(result, null, 2)
+      const filePath = path.join(
+        "/Users/rodneyshen/Desktop/jkl/dummy_data",
+        filename
       );
 
-      // Wait for the blockchain to process the transaction
+      const fileBuffer = fs.readFileSync(filePath);
+      const fileData = {
+        buffer: fileBuffer,
+        name: filename,
+        type: "application/octet-stream",
+        lastModified: Date.now(),
+      };
+
       console.log(
-        "Waiting for storage plan to be activated on the blockchain..."
+        `[INFO] - Attempt ${retries + 1}: Queuing file for private upload...`
       );
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second delay
+      await storageHandler.queuePrivate([fileData]);
 
-      // Verify the plan is now active
-      try {
-        const updatedStatus = await storageHandler.planStatus();
-        console.log(
-          "Updated storage plan status:",
-          JSON.stringify(updatedStatus, null, 2)
-        );
+      // Add a small delay before processing queue
+      await sleep(500);
 
-        if (updatedStatus && updatedStatus.active) {
-          console.log("Storage plan is now active");
-          return true;
-        } else {
-          console.error(
-            "Storage plan was purchased but is not showing as active yet"
-          );
-          return false;
-        }
-      } catch (verifyError) {
-        console.error(
-          "Error verifying storage plan after purchase:",
-          verifyError.message
-        );
-        return false;
+      console.log(
+        `[INFO] - Attempt ${retries + 1}: Processing upload queue...`
+      );
+      await storageHandler.processAllQueues();
+
+      console.log(`[INFO] - File uploaded successfully: ${filename}`);
+      return true;
+    } catch (error) {
+      retries++;
+      console.error(
+        `[ERROR] - Attempt ${retries}: Upload failed:`,
+        error.message
+      );
+
+      if (retries < MAX_RETRIES) {
+        console.log(`[INFO] - Waiting ${RETRY_DELAY}ms before retry...`);
+        await sleep(RETRY_DELAY);
+      } else {
+        console.error("[ERROR] - Max retries reached. Giving up.");
+        throw error;
       }
-    } catch (purchaseError) {
-      console.error("Failed to purchase storage plan:", purchaseError.message);
-      console.error("Purchase error details:", purchaseError);
-      return false;
     }
-  } catch (error) {
-    console.error("Error checking/purchasing storage plan:", error.message);
-    console.error("Error details:", error);
-    return false;
-  }
-}
-
-const fetchFile = async (filename) => {
-  try {
-    const filePath = path.join(
-      "/Users/rodneyshen/Desktop/jkl/dummy_data",
-      filename
-    );
-
-    const data = await fs.readFile(filePath, "utf8");
-    console.log("File contents:", data);
-
-    if (jackalInitialized) {
-      try {
-        const uploadPath = `${BASE_JACKAL_FOLDER}/${filename}`;
-        console.log(
-          `Attempting to upload file to Jackal at path: ${uploadPath}`
-        );
-        await simpleUploadFile(filePath, uploadPath);
-        console.log(`File uploaded to Jackal at: ${uploadPath}`);
-      } catch (uploadError) {
-        console.error("Error uploading to Jackal:", uploadError.message);
-      }
-    } else {
-      console.warn("Jackal client not initialized, skipping upload");
-    }
-
-    return data;
-  } catch (error) {
-    console.error("Error reading file:", error.message);
-    throw error;
   }
 };
 
 let isProcessing = false;
 
-initializeJackal().then(() => {
+initJackalClients(keyEnvVar).then((clients) => {
+  const storageHandler = clients.storageHandler;
+
   amqp.connect("amqp://localhost", function (error0, connection) {
     if (error0) {
       throw error0;
@@ -168,7 +78,6 @@ initializeJackal().then(() => {
 
       channel.assertQueue(QUEUE_NAME, {
         durable: false,
-        // switch to True in prod.
       });
       channel.prefetch(1); // Only process one message at a time
       console.log(
@@ -179,7 +88,6 @@ initializeJackal().then(() => {
         QUEUE_NAME,
         async function (msg) {
           if (isProcessing) {
-            // If already processing a message, requeue this one
             channel.nack(msg, false, true);
             return;
           }
@@ -187,20 +95,18 @@ initializeJackal().then(() => {
           isProcessing = true;
           try {
             console.log(`[x] Received filename: ${msg.content.toString()}`);
-            await fetchFile(msg.content.toString());
-
+            await uploadFile(msg.content.toString(), storageHandler);
             channel.ack(msg);
-
-            setTimeout(() => {
-              isProcessing = false;
-            }, 100);
           } catch (error) {
             console.error("Error processing message:", error.message);
-            channel.nack(msg, false, true);
-
+            // Requeue the message after a delay
+            setTimeout(() => {
+              channel.nack(msg, false, true);
+            }, RETRY_DELAY);
+          } finally {
             setTimeout(() => {
               isProcessing = false;
-            }, 100);
+            }, 1000);
           }
         },
         {
