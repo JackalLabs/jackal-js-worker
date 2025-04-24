@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { BASE_FOLDER, initJackalClients } from "./src/jackalClient";
 import { IClientHandler, IStorageHandler } from "@jackallabs/jackal.js";
+import dotenv from "dotenv";
 
 const keyEnvVar: string = process.argv[2] || "JKL_SECRET_KEY1";
 const QUEUE_NAME: string = "queue1";
@@ -21,7 +22,7 @@ const uploadFile = async (
   while (retries < MAX_RETRIES) {
     try {
       const filePath = path.join(
-        "/Users/rodneyshen/Desktop/jkl/dummy_data",
+        process.env["localFolder"] || "/Users/rodneyshen/Desktop/jkl/dummy_data/",
         filename
       );
 
