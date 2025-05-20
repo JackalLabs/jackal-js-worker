@@ -1,7 +1,7 @@
 import * as amqp from "amqplib/callback_api";
 import * as path from "path";
 import * as fs from "fs";
-import { BASE_FOLDER, initJackalClients } from "./src/jackalClient";
+import { BASE_FOLDER, initJackalClients } from "./jackalClient";
 import { IClientHandler, IStorageHandler } from "@jackallabs/jackal.js";
 import dotenv from "dotenv";
 
