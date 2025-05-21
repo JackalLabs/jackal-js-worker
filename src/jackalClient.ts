@@ -5,6 +5,11 @@ import {
   StorageHandler,
   TWalletExtensionNames,
 } from '@jackallabs/jackal.js'
+import {
+  S3Client,
+  paginateListObjectsV2,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3"
 import dotenv from 'dotenv'
 import { mainnet, testnet } from './config'
 
@@ -59,3 +64,75 @@ export async function initJackal() {
     process.exit(1)
   }
 }
+
+export class localJjs {
+  private sH: IStorageHandler
+  private workingHome: string
+  private s3: S3Client
+
+  constructor(sH: IStorageHandler, wH: string) {
+    this.sH = sH
+    this.workingHome = wH
+    this.s3 = new S3Client()
+  }
+
+  static async init() {
+    const {storageHandler, workingHome} = await initJackal()
+    return new localJjs(storageHandler, workingHome)
+  }
+
+  async uploadToJackal(source: string, dest: string) {
+    const fileData = await this.dataFromCache(source)
+    const fileMeta = await this.metaFromCache(`${source}-meta.json`)
+
+    let meta
+    try {
+      meta = JSON.parse(fileMeta)
+    } catch {
+      meta = {}
+    }
+
+    const file = new File([fileData], source, meta)
+    try {
+      await this.sH.queuePrivate([file])
+      await this.sH.processAllQueues()
+    } catch (err) {
+      console.warn('failed to back up to jackal')
+      console.error(err)
+    }
+  }
+
+  private async dataFromCache(source: string): Promise<Uint8Array> {
+    const { Body } = await this.s3.send(
+      new GetObjectCommand({
+        Bucket: process.env.WASABI_BUCKET,
+        Key: source,
+      }),
+    )
+    if (!Body) {
+      throw new Error('invalid body')
+    } else {
+      return await Body.transformToByteArray()
+    }
+  }
+
+  private async metaFromCache(source: string): Promise<string> {
+    const { Body } = await this.s3.send(
+      new GetObjectCommand({
+        Bucket: process.env.WASABI_BUCKET,
+        Key: source,
+      }),
+    )
+    if (!Body) {
+      throw new Error('invalid body')
+    } else {
+      return await Body.transformToString()
+    }
+  }
+
+
+
+}
+
+
+
