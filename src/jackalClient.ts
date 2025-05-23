@@ -5,11 +5,7 @@ import {
   StorageHandler,
   TWalletExtensionNames,
 } from '@jackallabs/jackal.js'
-import {
-  S3Client,
-  paginateListObjectsV2,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3"
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import dotenv from 'dotenv'
 import { mainnet, testnet } from './config'
 
@@ -47,9 +43,9 @@ export async function initJackal() {
     try {
       await storageHandler.loadDirectory({ path: `Home/${BASE_FOLDER}` })
     } catch {
-      console.log(`Creating storage root: ${BASE_FOLDER}`);
+      console.log(`Creating storage root: ${BASE_FOLDER}`)
       // Create S3 root folder
-      await storageHandler.createFolders({ names: BASE_FOLDER });
+      await storageHandler.createFolders({ names: BASE_FOLDER })
       await storageHandler.loadDirectory({ path: `Home/${BASE_FOLDER}` })
     }
 
@@ -77,11 +73,11 @@ export class localJjs {
   }
 
   static async init() {
-    const {storageHandler, workingHome} = await initJackal()
+    const { storageHandler, workingHome } = await initJackal()
     return new localJjs(storageHandler, workingHome)
   }
 
-  async uploadToJackal(source: string, dest: string) {
+  async uploadToJackal(source: string) {
     const fileData = await this.dataFromCache(source)
     const fileMeta = await this.metaFromCache(`${source}-meta.json`)
 
@@ -129,7 +125,6 @@ export class localJjs {
       return await Body.transformToString()
     }
   }
-
 
 
 }
