@@ -1,5 +1,5 @@
 {
-  "name": "rabbit",
+  "name": "jjs-worker",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -10,17 +10,23 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.815.0",
     "@jackallabs/jackal.js": "^3.6.1",
     "amqplib": "^0.10.7",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
+    "@btmills/prettier": "^3.3.3",
     "@types/amqplib": "^0.10.7",
     "@types/node": "^22.13.16",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
+    "eslint": "^9.27.0",
+    "eslint-config-prettier": "^10.1.5",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"

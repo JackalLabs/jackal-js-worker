@@ -1,4 +1,4 @@
-import { IClientSetup } from "@jackallabs/jackal.js";
+import { IClientSetup } from '@jackallabs/jackal.js'
 
 export const mainnetChainID = 'jackal-1'
 export const mainnet: IClientSetup = {
