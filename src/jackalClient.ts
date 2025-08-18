@@ -32,6 +32,8 @@ export async function initJackal() {
     }
   }
 
+  console.log('mnemonic', process.env.MAINNET_MNEMONIC )
+
 
   try {
     clientHandler = await ClientHandler.connect(pkg)
@@ -88,7 +90,7 @@ export class localJjs {
       meta = {}
     }
 
-    const file = new File([fileData], source, meta)
+    const file = new File([new Uint8Array(fileData)], source, meta)
     try {
       await this.sH.queuePrivate([file])
       await this.sH.processAllQueues()

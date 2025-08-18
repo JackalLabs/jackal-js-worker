@@ -6,7 +6,7 @@ dotenv.config()
 
 async function main() {
   const jjs = await localJjs.init()
-  const queueName = ''
+  const queueName = 'jackal_save'
 
   try {
     const connStr = `amqp://${process.env.RABBIT_HOST}`
@@ -33,7 +33,9 @@ async function main() {
           async function(msg: amqp.Message | null) {
             if (!msg) return
             try {
-              const msgJson = JSON.parse(msg.content.toString())
+              const messageContent = msg.content.toString()
+              console.log('messageContent', messageContent)
+              const msgJson = JSON.parse(messageContent)
               await jjs.uploadToJackal(msgJson.source)
               channel.ack(msg)
             } catch (err) {
