@@ -35,8 +35,8 @@ async function main() {
             try {
               const messageContent = msg.content.toString()
               console.log('messageContent', messageContent)
-              const msgJson = JSON.parse(messageContent)
-              await jjs.uploadToJackal(msgJson.source)
+              // const msgJson = JSON.parse(messageContent)
+              await jjs.uploadToJackal(messageContent)
               channel.ack(msg)
             } catch (err) {
               console.error(
