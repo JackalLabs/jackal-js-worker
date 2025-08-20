@@ -41,7 +41,6 @@ export async function initJackal() {
       setFullSigner: true,
     })
 
-    await storageHandler.initStorage()
     try {
       await storageHandler.loadDirectory({ path: `Home/${BASE_FOLDER}` })
     } catch {
