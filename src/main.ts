@@ -47,8 +47,10 @@ async function keepAlive(jjs: localJjs, queueName: string){
           try {
             const messageContent = msg.content.toString()
             console.log('messageContent', messageContent)
-            // const msgJson = JSON.parse(messageContent)
-            await jjs.uploadToJackal(messageContent)
+            const msgJson = JSON.parse(messageContent)
+            const path = msgJson.file_path
+            const taskID = msgJson.task_id
+            await jjs.uploadToJackal(taskID, path)
             channel.ack(msg)
           } catch (err) {
             console.error(

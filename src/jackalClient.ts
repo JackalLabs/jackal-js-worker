@@ -87,7 +87,17 @@ export class localJjs {
     return new localJjs(storageHandler, workingHome)
   }
 
-  async uploadToJackal(source: string) {
+  async uploadToJackal(taskID: string, source: string) {
+    // Create task folder if it doesn't exist
+    const taskFolder = `${this.workingHome}/${taskID}`
+    try {
+      await this.sH.loadDirectory({ path: taskFolder })
+    } catch {
+      console.log(`Creating task folder: ${taskID}`)
+      await this.sH.createFolders({ names: taskID })
+      await this.sH.loadDirectory({ path: taskFolder })
+    }
+
     const fileData = await this.dataFromCache(source)
 
     const file = new File([new Uint8Array(fileData)], source)
