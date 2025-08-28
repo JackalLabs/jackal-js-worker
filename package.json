@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "ts-node src/cafTest.ts",
+    "test:quick": "ts-node -e \"import('./src/cafTest').then(m => new m.CAFTester('./test-files').quickTest().then(r => console.log('Quick test:', r ? 'PASSED' : 'FAILED')))\"",
     "build": "tsc",
     "start": "ts-node src/main.ts",
     "dev": "ts-node-dev src/main.ts"

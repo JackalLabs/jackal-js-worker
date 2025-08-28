@@ -1,0 +1,5 @@
+This is a small text file for testing the CAF serializer.
+It contains multiple lines of text to ensure proper handling.
+Line 3 with some special characters: !@#$%^&*()
+Line 4 with unicode: 🚀 CAF testing 🎯
+Final line.

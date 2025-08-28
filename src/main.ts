@@ -40,6 +40,8 @@ async function keepAlive(jjs: localJjs, queueName: string){
         `[x] Waiting for messages in ${queueName}. To exit press CTRL+C \n`,
       )
 
+    // taskID (ulid) + file name (string no sanitization) + bytes 
+
       channel.consume(
         queueName,
         async function(msg: amqp.Message | null) {
