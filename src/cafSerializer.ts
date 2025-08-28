@@ -37,6 +37,11 @@ export class CAFSerializer {
     this.outputPath = outputPath || this.createTempFile();
     this.maxChunkSize = maxChunkSizeGB * 1024 * 1024 * 1024; // Convert GB to bytes
     this.writeStream = fs.createWriteStream(this.outputPath);
+    
+    // Ensure the write stream was created successfully
+    if (!this.writeStream) {
+      throw new Error('Failed to create write stream');
+    }
   }
 
   /**
@@ -107,9 +112,27 @@ export class CAFSerializer {
     return new Promise<boolean>((resolve, reject) => {
       let bytesReceived = 0;
       const startTime = Date.now();
+      let isResolved = false;
+
+      // Cleanup function to remove event listeners and destroy stream
+      const cleanup = () => {
+        if (isResolved) return;
+        isResolved = true;
+        
+        // Remove all event listeners
+        stream.removeAllListeners('error');
+        stream.removeAllListeners('data');
+        stream.removeAllListeners('end');
+        
+        // Destroy the stream to free memory
+        if ('destroy' in stream && typeof (stream as any).destroy === 'function') {
+          (stream as any).destroy();
+        }
+      };
 
       stream.on('error', (error) => {
         console.error(`CAF: Stream error for ${filePath}:`, error);
+        cleanup();
         reject(error);
       });
 
@@ -144,12 +167,20 @@ export class CAFSerializer {
 
         this.currentPosition = endByte;
         console.log(`CAF: New position: ${this.currentPosition}`);
+        
+        cleanup();
         resolve(true);
       });
 
       // Pipe the stream directly to the CAF write stream
       console.log(`CAF: Starting pipe for ${filePath}`);
-      stream.pipe(this.writeStream, { end: false });
+      if (this.writeStream && !this.writeStream.destroyed) {
+        stream.pipe(this.writeStream, { end: false });
+      } else {
+        cleanup();
+        reject(new Error('Write stream has been destroyed'));
+        return;
+      }
     });
   }
 
@@ -162,6 +193,18 @@ export class CAFSerializer {
   public async addFileFromPath(filePath: string, sourceFilePath: string): Promise<boolean> {
     const fileData = await fs.promises.readFile(sourceFilePath);
     return this.addFile(filePath, fileData);
+  }
+
+  /**
+   * Cleanup method to free resources
+   */
+  public cleanup(): void {
+    if (this.writeStream && !this.writeStream.destroyed) {
+      this.writeStream.end();
+      this.writeStream.destroy();
+    }
+    // Clear the file index to free memory
+    this.fileIndex = {};
   }
 
   /**
@@ -185,6 +228,12 @@ export class CAFSerializer {
       
       console.log(`CAF: Index size: ${indexSize} bytes`);
 
+      // Check if stream is still valid
+      if (!this.writeStream || this.writeStream.destroyed) {
+        reject(new Error('Write stream has been destroyed'));
+        return;
+      }
+      
       // Write index
       this.writeStream.write(indexBuffer, (error) => {
         if (error) {
@@ -192,6 +241,12 @@ export class CAFSerializer {
           return;
         }
 
+        // Check if stream is still valid before writing footer
+        if (!this.writeStream || this.writeStream.destroyed) {
+          reject(new Error('Write stream has been destroyed'));
+          return;
+        }
+        
         // Write footer (index size as 4-byte little-endian uint32)
         const footerBuffer = Buffer.allocUnsafe(4);
         footerBuffer.writeUInt32LE(indexSize, 0);
@@ -205,6 +260,12 @@ export class CAFSerializer {
           this.writeStream.end(() => {
             console.log(`CAF: Successfully finalized ${this.outputPath}`)
             console.log(`CAF: Final archive size: ${this.currentPosition + indexSize + 4} bytes`)
+            
+            // Clean up the stream after finalization is complete
+            if (this.writeStream && !this.writeStream.destroyed) {
+              this.writeStream.destroy();
+            }
+            
             resolve(this.outputPath);
           });
         });

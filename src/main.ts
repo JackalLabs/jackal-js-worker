@@ -23,6 +23,7 @@
     }
 
     async processMessage(msg: amqp.Message, channel: amqp.Channel): Promise<void> {
+      let stream: NodeJS.ReadableStream | null = null;
       try {
         const messageContent = msg.content.toString()
         const msgJson = JSON.parse(messageContent)
@@ -31,7 +32,9 @@
 
                  // Download file stream from Wasabi
          console.log(`Streaming file from Wasabi: ${filePath}`)
-         const { stream, contentLength } = await wasabiClient.downloadFileStream(filePath)
+         const streamResult = await wasabiClient.downloadFileStream(filePath)
+         stream = streamResult.stream
+         const { contentLength } = streamResult
          console.log(`Got file stream from Wasabi: ${filePath} (${contentLength} bytes)`)
 
          // Initialize CAF if needed
@@ -60,7 +63,9 @@
           // Start new CAF and add the file stream
           this.currentCAF = new CAFSerializer(undefined, 1.5)
           // Get a fresh stream since the original was consumed
-          const { stream: newStream, contentLength: newContentLength } = await wasabiClient.downloadFileStream(filePath)
+          const streamResult2 = await wasabiClient.downloadFileStream(filePath)
+          const newStream = streamResult2.stream
+          const { contentLength: newContentLength } = streamResult2
           await this.currentCAF.addFileFromStream(cafFileName, newStream, newContentLength)
           this.pendingMessages.push({ msg, taskId, filePath })
           console.log(`Added file to new CAF: ${cafFileName} (${newContentLength} bytes)`)
@@ -76,6 +81,10 @@
           'Error processing message:',
           err instanceof Error ? err.message : String(err),
         )
+        // Ensure stream is cleaned up on error
+        if (stream && 'destroy' in stream && typeof (stream as any).destroy === 'function') {
+          (stream as any).destroy();
+        }
         channel.nack(msg, false, true)
       }
     }

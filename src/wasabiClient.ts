@@ -102,10 +102,20 @@ export class WasabiClient {
       class AWSStreamReader extends Readable {
         private reader: ReadableStreamDefaultReader<Uint8Array>
         private isReading = false
+        private drainHandler: (() => void) | null = null
         
         constructor(reader: ReadableStreamDefaultReader<Uint8Array>) {
           super()
           this.reader = reader
+          
+          // Set up a single, persistent drain handler
+          this.drainHandler = () => {
+            this.isReading = false
+            this._read()
+          }
+          
+          // Increase max listeners to prevent warnings during high-throughput scenarios
+          this.setMaxListeners(20)
         }
         
         _read() {
@@ -118,23 +128,39 @@ export class WasabiClient {
           try {
             const { done, value } = await this.reader.read()
             if (done) {
+              this.isReading = false
               this.push(null) // End of stream
               return
             }
             
             // Push the chunk - if buffer is full, this will pause
             if (!this.push(Buffer.from(value))) {
-              // Wait for drain before reading next chunk
-              this.once('drain', () => this._readNextChunk())
+              // Add drain listener only if not already present
+              if (this.listenerCount('drain') === 0) {
+                this.on('drain', this.drainHandler!)
+              }
             } else {
               // Continue reading next chunk
+              this.isReading = false
               this._readNextChunk()
             }
           } catch (error) {
-            this.destroy(error instanceof Error ? error : new Error(String(error)))
-          } finally {
             this.isReading = false
+            this.destroy(error instanceof Error ? error : new Error(String(error)))
           }
+        }
+        
+        _destroy(error: Error | null, callback: (error: Error | null) => void) {
+          // Remove drain listener
+          if (this.drainHandler) {
+            this.off('drain', this.drainHandler)
+          }
+          
+          // Clean up the reader when stream is destroyed
+          if (this.reader) {
+            this.reader.releaseLock();
+          }
+          callback(error);
         }
       }
       
