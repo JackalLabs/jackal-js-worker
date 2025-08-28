@@ -46,6 +46,7 @@ export async function initJackal() {
     } catch {
       console.log(`Creating storage root: ${BASE_FOLDER}`)
       // Create S3 root folder
+      await storageHandler.loadDirectory({ path: `Home` })
       await storageHandler.createFolders({ names: BASE_FOLDER })
       await storageHandler.loadDirectory({ path: `Home/${BASE_FOLDER}` })
     }
@@ -54,7 +55,6 @@ export async function initJackal() {
 
 
     const initPool = {
-      jkl1t5708690gf9rc3mmtgcjmn9padl8va5g03f9wm: "https://mprov01.jackallabs.io",
       jkl1esjprqperjzwspaz6er7azzgqkvsa6n5kljv05: "https://mprov02.jackallabs.io",
       jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
       jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "https://jklstorage2.squirrellogic.com",
@@ -107,6 +107,23 @@ export class localJjs {
     } catch (err) {
       console.warn('failed to back up to jackal')
       console.error(err)
+    }
+  }
+
+  async uploadCAFToJackal(cafFileName: string, cafFilePath: string) {
+    // Read the CAF file from local filesystem
+    const fs = await import('fs')
+    const cafData = await fs.promises.readFile(cafFilePath)
+
+    const file = new File([new Uint8Array(cafData)], cafFileName)
+    try {
+      await this.sH.queuePrivate([file])
+      await this.sH.processAllQueues()
+      console.log(`Successfully uploaded CAF to Jackal: ${cafFileName}`)
+    } catch (err) {
+      console.warn('Failed to upload CAF to Jackal')
+      console.error(err)
+      throw err
     }
   }
 

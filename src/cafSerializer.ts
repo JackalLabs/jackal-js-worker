@@ -85,6 +85,75 @@ export class CAFSerializer {
   }
 
   /**
+   * Adds a file to the CAF archive from a stream
+   * @param filePath - The path/name to store the file as in the archive
+   * @param stream - The readable stream containing file data
+   * @param contentLength - The size of the file in bytes
+   * @returns Promise<boolean> - true if file was added, false if it would exceed chunk size
+   */
+  public async addFileFromStream(filePath: string, stream: NodeJS.ReadableStream, contentLength: number): Promise<boolean> {
+    console.log(`CAF: Starting to add file stream: ${filePath} (${contentLength} bytes)`)
+    console.log(`CAF: Current position: ${this.currentPosition}, Max size: ${this.maxChunkSize}`)
+    
+    // Check if adding this file would exceed the chunk size limit
+    if (this.currentPosition + contentLength > this.maxChunkSize) {
+      console.log(`CAF: File ${filePath} would exceed size limit (${this.currentPosition + contentLength} > ${this.maxChunkSize})`)
+      return false;
+    }
+
+    const startByte = this.currentPosition;
+    console.log(`CAF: Adding file ${filePath} at position ${startByte}`)
+    
+    return new Promise<boolean>((resolve, reject) => {
+      let bytesReceived = 0;
+      const startTime = Date.now();
+
+      stream.on('error', (error) => {
+        console.error(`CAF: Stream error for ${filePath}:`, error);
+        reject(error);
+      });
+
+      let lastProgressUpdate = Date.now();
+      const progressInterval = 5000; // 5 seconds
+      
+      stream.on('data', (chunk) => {
+        bytesReceived += chunk.length;
+        const now = Date.now();
+        
+        // Only log progress every 5 seconds
+        if (now - lastProgressUpdate >= progressInterval) {
+          const progress = ((bytesReceived / contentLength) * 100).toFixed(1);
+          console.log(`CAF: Streaming ${filePath}: ${bytesReceived}/${contentLength} bytes (${progress}%)`);
+          lastProgressUpdate = now;
+        }
+      });
+
+      stream.on('end', () => {
+        const endByte = this.currentPosition + contentLength;
+        const duration = Date.now() - startTime;
+        const throughput = (contentLength / 1024 / 1024) / (duration / 1000); // MB/s
+        
+        console.log(`CAF: Finished streaming ${filePath} in ${duration}ms (${throughput.toFixed(2)} MB/s)`);
+        console.log(`CAF: File added to index: ${startByte} to ${endByte}`);
+        
+        // Add to index
+        this.fileIndex[filePath] = {
+          start_byte: startByte,
+          end_byte: endByte
+        };
+
+        this.currentPosition = endByte;
+        console.log(`CAF: New position: ${this.currentPosition}`);
+        resolve(true);
+      });
+
+      // Pipe the stream directly to the CAF write stream
+      console.log(`CAF: Starting pipe for ${filePath}`);
+      stream.pipe(this.writeStream, { end: false });
+    });
+  }
+
+  /**
    * Adds a file from filesystem to the CAF archive
    * @param filePath - The path/name to store the file as in the archive
    * @param sourceFilePath - Path to the source file on filesystem
@@ -99,6 +168,10 @@ export class CAFSerializer {
    * Finalizes the CAF archive by writing the index and footer
    */
   public async finalize(): Promise<string> {
+    console.log(`CAF: Starting finalization of ${this.outputPath}`)
+    console.log(`CAF: Final size: ${this.currentPosition} bytes`)
+    console.log(`CAF: Total files: ${Object.keys(this.fileIndex).length}`)
+    
     return new Promise<string>((resolve, reject) => {
       // Create the index
       const index: CAFIndex = {
@@ -109,6 +182,8 @@ export class CAFSerializer {
       const indexJson = JSON.stringify(index);
       const indexBuffer = Buffer.from(indexJson, 'utf8');
       const indexSize = indexBuffer.length;
+      
+      console.log(`CAF: Index size: ${indexSize} bytes`);
 
       // Write index
       this.writeStream.write(indexBuffer, (error) => {
@@ -128,6 +203,8 @@ export class CAFSerializer {
           }
 
           this.writeStream.end(() => {
+            console.log(`CAF: Successfully finalized ${this.outputPath}`)
+            console.log(`CAF: Final archive size: ${this.currentPosition + indexSize + 4} bytes`)
             resolve(this.outputPath);
           });
         });

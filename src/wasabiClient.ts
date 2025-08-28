@@ -69,6 +69,86 @@ export class WasabiClient {
     }
   }
 
+  /**
+   * Download a file from Wasabi as a proper Node.js stream
+   * @param filePath - The key/path of the file in the bucket
+   * @returns Promise<{stream: NodeJS.ReadableStream, contentLength: number}> - The file stream and size
+   */
+  async downloadFileStream(filePath: string): Promise<{stream: NodeJS.ReadableStream, contentLength: number}> {
+    console.log(`Downloading file stream from Wasabi bucket=${this.bucket} key=${filePath}`)
+    
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: filePath,
+      })
+
+      const response = await this.client.send(command)
+      
+      if (!response.Body) {
+        throw new Error('No body in response')
+      }
+
+      const contentLength = response.ContentLength || 0
+      
+      // Create a true streaming implementation that reads chunks on-demand
+      console.log(`Creating streaming reader for: ${filePath}`)
+      
+      const { Readable } = await import('stream')
+      const webStream = response.Body.transformToWebStream()
+      const reader = webStream.getReader()
+      
+      // Create a custom Readable stream that reads from AWS on-demand
+      class AWSStreamReader extends Readable {
+        private reader: ReadableStreamDefaultReader<Uint8Array>
+        private isReading = false
+        
+        constructor(reader: ReadableStreamDefaultReader<Uint8Array>) {
+          super()
+          this.reader = reader
+        }
+        
+        _read() {
+          if (this.isReading) return
+          this.isReading = true
+          this._readNextChunk()
+        }
+        
+        private async _readNextChunk() {
+          try {
+            const { done, value } = await this.reader.read()
+            if (done) {
+              this.push(null) // End of stream
+              return
+            }
+            
+            // Push the chunk - if buffer is full, this will pause
+            if (!this.push(Buffer.from(value))) {
+              // Wait for drain before reading next chunk
+              this.once('drain', () => this._readNextChunk())
+            } else {
+              // Continue reading next chunk
+              this._readNextChunk()
+            }
+          } catch (error) {
+            this.destroy(error instanceof Error ? error : new Error(String(error)))
+          } finally {
+            this.isReading = false
+          }
+        }
+      }
+      
+      const stream = new AWSStreamReader(reader)
+      console.log(`Stream created, will read chunks on-demand: ${filePath}`)
+      
+      console.log(`Successfully created file stream: ${filePath} (${contentLength} bytes)`)
+      return { stream, contentLength }
+    } catch (error) {
+      console.error(`Failed to download file stream from bucket=${this.bucket} key=${filePath}:`, error)
+      throw new Error(`Failed to download file stream from bucket=${this.bucket} key=${filePath}: ${error}`)
+    }
+  }
+
 }
 
 // Export a singleton instance
