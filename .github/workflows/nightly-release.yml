@@ -1,0 +1,257 @@
+name: Nightly Release - CAF CLI
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+  push:
+    branches:
+      - main
+    paths:
+      - 'goimpl/**'
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should-build: ${{ steps.check.outputs.should-build }}
+      short-sha: ${{ steps.vars.outputs.short-sha }}
+      date: ${{ steps.vars.outputs.date }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for changes in goimpl
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "Manual trigger - building release"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "should-build=true" >> $GITHUB_OUTPUT
+            echo "Push to main - building release"
+          else
+            # For scheduled runs, check if there were changes in the last 24 hours
+            CHANGES=$(git log --since="24 hours ago" --oneline --pretty=format:"%h" -- goimpl/ | wc -l)
+            if [ $CHANGES -gt 0 ]; then
+              echo "should-build=true" >> $GITHUB_OUTPUT
+              echo "Found $CHANGES changes in goimpl/ in the last 24 hours"
+            else
+              echo "should-build=false" >> $GITHUB_OUTPUT
+              echo "No changes in goimpl/ in the last 24 hours"
+            fi
+          fi
+
+      - name: Set variables
+        id: vars
+        run: |
+          echo "short-sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+  build-and-release:
+    needs: check-changes
+    if: needs.check-changes.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - os: macos
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - os: macos
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('goimpl/go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build binary
+        working-directory: ./goimpl
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go mod tidy
+          BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S_UTC')
+          go build -ldflags="-s -w -X main.version=nightly-${{ needs.check-changes.outputs.date }}-${{ needs.check-changes.outputs.short-sha }} -X main.commit=${{ needs.check-changes.outputs.short-sha }} -X main.date=${BUILD_DATE}" -o cafcli-${{ matrix.suffix }} .
+          
+          # Create archive
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip cafcli-${{ matrix.suffix }}.zip cafcli-${{ matrix.suffix }}.exe README.md
+          else
+            tar -czf cafcli-${{ matrix.suffix }}.tar.gz cafcli-${{ matrix.suffix }} README.md
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: cafcli-${{ matrix.suffix }}
+          path: |
+            goimpl/cafcli-${{ matrix.suffix }}*
+          retention-days: 30
+
+  create-release:
+    needs: [check-changes, build-and-release]
+    if: needs.check-changes.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p ./release-assets
+          find ./artifacts -name "cafcli-*" -type f -exec cp {} ./release-assets/ \;
+          ls -la ./release-assets/
+
+      - name: Delete existing nightly release
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete the release first
+          gh release delete nightly --yes || true
+          # Delete the tag
+          git push --delete origin nightly || true
+
+      - name: Create nightly release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create or update the nightly tag
+          git tag -f nightly
+          git push -f origin nightly
+          
+          # Get commit info for release notes
+          COMMIT_SHA="${{ needs.check-changes.outputs.short-sha }}"
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s" HEAD)
+          COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an" HEAD)
+          BUILD_DATE=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          
+          # Create release notes
+          cat > release-notes.md << EOF
+          # CAF CLI Nightly Build
+          
+          **Build Date:** $BUILD_DATE  
+          **Commit:** \`$COMMIT_SHA\`  
+          **Author:** $COMMIT_AUTHOR  
+          **Message:** $COMMIT_MSG
+          
+          ## Downloads
+          
+          Choose the appropriate binary for your platform:
+          
+          ### Linux
+          - **Linux x64:** \`cafcli-linux-amd64.tar.gz\`
+          - **Linux ARM64:** \`cafcli-linux-arm64.tar.gz\`
+          
+          ### macOS
+          - **macOS Intel:** \`cafcli-darwin-amd64.tar.gz\`
+          - **macOS Apple Silicon:** \`cafcli-darwin-arm64.tar.gz\`
+          
+          ## Installation
+          
+          1. Download the appropriate archive for your platform
+          2. Extract the archive: \`tar -xzf cafcli-<platform>.tar.gz\`
+          3. Make executable: \`chmod +x cafcli-<platform>\`
+          4. Move to PATH: \`sudo mv cafcli-<platform> /usr/local/bin/cafcli\`
+          
+          ## Usage
+          
+          \`\`\`bash
+          # List files in a CAF archive
+          cafcli list archive.caf
+          
+          # Extract all files
+          cafcli split archive.caf
+          
+          # Extract specific file
+          cafcli extract archive.caf path/to/file.txt output.txt
+          
+          # Show help
+          cafcli --help
+          \`\`\`
+          
+          ---
+          
+          ⚠️ **Note:** This is a nightly development build. For stable releases, use the tagged releases.
+          EOF
+          
+          # Create the release
+          gh release create nightly \
+            --title "Nightly Build ($BUILD_DATE)" \
+            --notes-file release-notes.md \
+            --prerelease \
+            --target main \
+            ./release-assets/*
+
+  cleanup-old-artifacts:
+    needs: create-release
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup old artifacts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Keep only the last 5 nightly releases worth of artifacts
+            const { data: artifacts } = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            const nightlyArtifacts = artifacts.artifacts
+              .filter(artifact => artifact.name.startsWith('cafcli-'))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              .slice(20); // Keep last 20 artifacts (4 platforms × 5 builds)
+            
+            for (const artifact of nightlyArtifacts) {
+              console.log(`Deleting old artifact: ${artifact.name} (${artifact.created_at})`);
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id
+              });
+            }

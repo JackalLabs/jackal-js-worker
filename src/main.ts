@@ -1,10 +1,16 @@
   import amqp from 'amqplib/callback_api'
-  import dotenv from 'dotenv'
-  import { localJjs } from './jackalClient'
-  import { CAFSerializer } from './cafSerializer'
-  import { wasabiClient } from './wasabiClient'
+import dotenv from 'dotenv'
+import { localJjs } from './jackalClient'
+import { CAFSerializer } from './cafSerializer'
+import { wasabiClient } from './wasabiClient'
+import { database } from './database'
 
-  dotenv.config()
+dotenv.config()
+
+// CAF configuration constants
+const CAF_MAX_SIZE_GB = 1.75
+const CAF_MAX_SIZE_BYTES = CAF_MAX_SIZE_GB * 1024 * 1024 * 1024
+const prefetch = 1000
 
   interface PendingMessage {
     msg: amqp.Message
@@ -13,13 +19,47 @@
   }
 
   class CAFBatchProcessor {
-    private jjs: localJjs
-    private currentCAF: CAFSerializer | null = null
-    private pendingMessages: PendingMessage[] = []
-    private readonly MAX_CAF_SIZE = 1.5 * 1024 * 1024 * 1024 // 1.5GB in bytes
+  private jjs: localJjs
+  private currentCAF: CAFSerializer | null = null
+  private pendingMessages: PendingMessage[] = []
+  private inactivityTimer: NodeJS.Timeout | null = null
+  private readonly INACTIVITY_TIMEOUT_MS = 30000 // 10 seconds
 
     constructor(jjs: localJjs) {
       this.jjs = jjs
+    }
+
+    /**
+     * Start or reset the inactivity timer
+     */
+    private startInactivityTimer(channel: amqp.Channel): void {
+      // Clear existing timer if any
+      if (this.inactivityTimer) {
+        clearTimeout(this.inactivityTimer)
+      }
+      
+      // Start new timer
+      this.inactivityTimer = setTimeout(async () => {
+        console.log('Inactivity timeout reached, finalizing current CAF...')
+        await this.finalizeCurrentCAF(channel)
+      }, this.INACTIVITY_TIMEOUT_MS)
+    }
+
+    /**
+     * Clear the inactivity timer
+     */
+    private clearInactivityTimer(): void {
+      if (this.inactivityTimer) {
+        clearTimeout(this.inactivityTimer)
+        this.inactivityTimer = null
+      }
+    }
+
+    /**
+     * Cleanup method to clear timers
+     */
+    cleanup(): void {
+      this.clearInactivityTimer()
     }
 
     async processMessage(msg: amqp.Message, channel: amqp.Channel): Promise<void> {
@@ -39,16 +79,20 @@
 
          // Initialize CAF if needed
          if (!this.currentCAF) {
-           this.currentCAF = new CAFSerializer(undefined, 1.5) // 1.5GB limit
-           console.log('Initialized new CAF archive')
+           this.currentCAF = new CAFSerializer(undefined, CAF_MAX_SIZE_GB)
+           console.log(`Initialized new CAF archive (${CAF_MAX_SIZE_GB}GB limit)`)
          } else {
-           console.log('CAF already initialized')
+           console.log(`CAF already initialized with limit: ${CAF_MAX_SIZE_GB}GB`)
          }
 
          // Create filename using task+filepath
          const cafFileName = `${taskId}/${filePath}`
 
+         // Start/reset inactivity timer for any activity
+         this.startInactivityTimer(channel)
+
          // Try to add file stream to current CAF
+         console.log(`CAF size limit: ${this.currentCAF.getMaxSizeGB().toFixed(2)}GB (${this.currentCAF.getMaxSize()} bytes)`)
          const added = await this.currentCAF.addFileFromStream(cafFileName, stream, contentLength)
         if (added) {
           // File added successfully, track the message
@@ -57,11 +101,14 @@
           console.log(`CAF current size: ${this.currentCAF.getCurrentSize()} bytes (${this.pendingMessages.length} files)`)
         } else {
           // CAF full - finalize current and start new
-          console.log('CAF full, finalizing current and starting new')
+          console.log(`CAF full (${this.currentCAF.getCurrentSize()} bytes), finalizing current and starting new`)
           await this.finalizeCurrentCAF(channel)
           
+          // Reset inactivity timer since we're starting a new CAF
+          this.startInactivityTimer(channel)
+          
           // Start new CAF and add the file stream
-          this.currentCAF = new CAFSerializer(undefined, 1.5)
+          this.currentCAF = new CAFSerializer(undefined, CAF_MAX_SIZE_GB)
           // Get a fresh stream since the original was consumed
           const streamResult2 = await wasabiClient.downloadFileStream(filePath)
           const newStream = streamResult2.stream
@@ -69,11 +116,17 @@
           await this.currentCAF.addFileFromStream(cafFileName, newStream, newContentLength)
           this.pendingMessages.push({ msg, taskId, filePath })
           console.log(`Added file to new CAF: ${cafFileName} (${newContentLength} bytes)`)
+          
+          // Start inactivity timer for new CAF
+          this.startInactivityTimer(channel)
         }
 
-        if (this.pendingMessages.length >= 10) {
-          console.log('Reached 10 files, finalizing current CAF...')
+        if (this.pendingMessages.length >= prefetch) {
+          console.log(`Reached ${prefetch} files, finalizing current CAF...`)
           await this.finalizeCurrentCAF(channel)
+          
+          // Reset inactivity timer since we're starting fresh
+          this.startInactivityTimer(channel)
         }
 
       } catch (err) {
@@ -100,6 +153,9 @@
       // Reset state immediately to prevent double finalization
       this.currentCAF = null
       this.pendingMessages = []
+      
+      // Clear inactivity timer since we're finalizing
+      this.clearInactivityTimer()
 
       try {
         // Finalize the CAF archive
@@ -176,7 +232,7 @@
             durable: true,
           })
 
-          channel.prefetch(10) // Pull 10 messages at a time for simple batching
+          channel.prefetch(prefetch) // Pull 10 messages at a time for simple batching
           console.log(`[x] Waiting for messages in ${queueName}. To exit press CTRL+C \n`)
 
           const batchProcessor = new CAFBatchProcessor(jjs)
@@ -184,6 +240,16 @@
           // Handle graceful shutdown
           process.on('SIGINT', async () => {
             console.log('Received SIGINT, shutting down gracefully...')
+            try {
+              // Cleanup batch processor
+              batchProcessor.cleanup()
+              console.log('Batch processor cleaned up')
+              
+              await database.disconnect()
+              console.log('Database disconnected')
+            } catch (err) {
+              console.error('Error disconnecting from database:', err)
+            }
             connection.close()
             process.exit(0)
           })

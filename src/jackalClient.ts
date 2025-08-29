@@ -8,6 +8,7 @@ import {
 import dotenv from 'dotenv'
 import { mainnet, testnet } from './config'
 import { wasabiClient } from './wasabiClient'
+import { database } from './database'
 
 dotenv.config()
 
@@ -17,23 +18,37 @@ export async function initJackal() {
 
   const BASE_FOLDER = process.env.JACKAL_FOLDER || ''
 
+  // Connect to database and get worker information
+  await database.connect()
+  
+  const workerId = process.env.JACKAL_WORKER_ID
+  if (!workerId) {
+    throw new Error('JACKAL_WORKER_ID environment variable is required')
+  }
+
+  const worker = await database.getJackalWorker(parseInt(workerId))
+  if (!worker) {
+    throw new Error(`Jackal worker with ID ${workerId} not found in database`)
+  }
+
+  console.log(`Using Jackal worker: ID ${worker.id}, Address: ${worker.address}`)
+
   let pkg
   if (process.env.CHAIN_MODE === 'mainnet') {
     pkg = {
       ...mainnet,
       selectedWallet: 'mnemonic' as TWalletExtensionNames,
-      mnemonic: process.env.MAINNET_MNEMONIC || '',
+      mnemonic: worker.seed,
     }
   } else {
     pkg = {
       ...testnet,
       selectedWallet: 'mnemonic' as TWalletExtensionNames,
-      mnemonic: process.env.TESTNET_MNEMONIC || '',
+      mnemonic: worker.seed,
     }
   }
 
-  console.log('mnemonic', process.env.MAINNET_MNEMONIC )
-
+  console.log('Using seedphrase from database')
 
   try {
     clientHandler = await ClientHandler.connect(pkg)
@@ -53,7 +68,6 @@ export async function initJackal() {
 
     console.log('Jackal.js client initialized successfully')
 
-
     const initPool = {
       jkl1esjprqperjzwspaz6er7azzgqkvsa6n5kljv05: "https://mprov02.jackallabs.io",
       jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
@@ -66,9 +80,10 @@ export async function initJackal() {
     await storageHandler.loadProviderPool(initPool)
 
     return { storageHandler, workingHome: `Home/${BASE_FOLDER}` }
-  } catch
-    (err) {
+  } catch (err) {
     console.error('Failed to initialize Jackal.js client:', err)
+    // Disconnect from database on error
+    await database.disconnect()
     process.exit(1)
   }
 }

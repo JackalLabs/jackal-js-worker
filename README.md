@@ -14,11 +14,13 @@ This project consists of two main components:
 2. **Jackal.js Integration**:
    - TypeScript implementation for interacting with the Jackal decentralized storage network
    - Handles file uploads, directory management, and authentication
+   - **NEW**: Database-based configuration - retrieves seedphrase from PostgreSQL database instead of environment variables
 
 ## Prerequisites
 
 - Node.js (v14 or higher)
 - RabbitMQ server running locally (`amqp://localhost`)
+- PostgreSQL database with `jackal_workers` table
 - Access to a Jackal storage network (testnet configuration included)
 
 ## Installation
@@ -51,52 +53,88 @@ This will:
 - Expose port 15672 for the management UI (accessible at http://localhost:15672)
 - Use the RabbitMQ management image which includes the web UI
 
+## Configuration
+
+### Environment Variables
+
+The worker now requires the following environment variables:
+
+#### Required Variables
+- `JACKAL_WORKER_ID`: The database ID of the Jackal worker to use
+- `DB_HOST`: PostgreSQL database host
+- `DB_USER`: PostgreSQL database username
+- `DB_PASS`: PostgreSQL database password
+- `DB_NAME`: PostgreSQL database name
+- `CHAIN_MODE`: Either "mainnet" or "testnet"
+
+#### Optional Variables
+- `DB_PORT`: PostgreSQL database port (default: 5432)
+- `DB_ROOT_CERT`: Path to SSL root certificate (if using SSL)
+- `DB_CERT`: Path to SSL client certificate (if using SSL)
+- `DB_KEY`: Path to SSL client key (if using SSL)
+
+### Database Setup
+
+The worker expects a `jackal_workers` table with the following structure:
+
+```sql
+CREATE TABLE jackal_workers (
+    id SERIAL PRIMARY KEY,
+    address VARCHAR(255) NOT NULL,
+    seed TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+Insert a worker record with your Jackal wallet seedphrase:
+
+```sql
+INSERT INTO jackal_workers (address, seed) 
+VALUES ('jkl1...', 'your twelve word seedphrase here');
+```
+
 ## Usage
 
 ### Starting the Receiver(Jackal Worker)
 
-To run multiple Jackal workers, you can run multiple instances of the `receive.js` script with different key environment variables.
+To run multiple Jackal workers, you can run multiple instances of the `main.ts` script with different `JACKAL_WORKER_ID` environment variables.
 
-If the second variable is not provided, it will default to `JKL_SECRET_KEY1`.
+```bash
+# Set the worker ID to use
+export JACKAL_WORKER_ID=1
 
-```
-node receive.js
-```
-
-This will:
-
-- Initialize the Jackal client
-- Connect to RabbitMQ
-- Listen for messages on "queue1"
-- Process filenames by reading them from `/Users/rodneyshen/Desktop/jkl/dummy_data/` (configure this path for your environment)
-- Upload files to Jackal storage at `Home/test/[filename]`
-
-### Sending Messages
-
-```
-node send.js
+# Start the worker
+npm start
 ```
 
 This will:
 
+- Connect to the PostgreSQL database
+- Retrieve the seedphrase for the specified worker ID
+- Initialize the Jackal client with the database seedphrase
 - Connect to RabbitMQ
-- Prompt you to enter filenames
-- Send each filename to the queue for processing by the receiver
+- Listen for messages on "jackal_save" queue
+- Process files and upload them to Jackal storage
 
-### Configuration
+### Running with Docker
 
-The project uses environment variables for configuration. Check the `.env` file.
+The worker can be run using Docker Compose with the provided configuration:
 
-## Project Structure
+```bash
+docker-compose up js-worker
+```
 
-- `send.js` - RabbitMQ producer
-- `receive.js` - RabbitMQ consumer that processes messages and calls Jackal functions
-- `src/jackal.ts` - TypeScript implementation of Jackal integration
-- `src/config.ts` - Configuration for Jackal network
-- `jackal.js` - Compiled JavaScript from TypeScript source
-- `config.js` - Compiled JavaScript from TypeScript source
-- `dist/` - Directory containing compiled TypeScript files
+Make sure to set the `JACKAL_WORKER_ID` environment variable in your `.env` file or environment.
 
-## License
+## Architecture Changes
 
-ISC
+### Before (Environment-based)
+- Used `MAINNET_MNEMONIC` environment variable for seedphrase
+- Required manual configuration of seedphrase in environment
+
+### After (Database-based)
+- Uses `JACKAL_WORKER_ID` to look up worker in database
+- Retrieves seedphrase from `jackal_workers.seed` field
+- Supports multiple workers with different seedphrases
+- More secure and manageable for production deployments

@@ -115,7 +115,7 @@ export class CAFSerializer {
       let isResolved = false;
 
       // Cleanup function to remove event listeners and destroy stream
-      const cleanup = () => {
+      let cleanup = () => {
         if (isResolved) return;
         isResolved = true;
         
@@ -149,6 +149,14 @@ export class CAFSerializer {
           console.log(`CAF: Streaming ${filePath}: ${bytesReceived}/${contentLength} bytes (${progress}%)`);
           lastProgressUpdate = now;
         }
+        
+        // Check if writeStream is still healthy
+        if (this.writeStream.destroyed) {
+          console.error(`CAF: WriteStream destroyed during data transfer for ${filePath}`);
+          cleanup();
+          reject(new Error('WriteStream was destroyed during transfer'));
+          return;
+        }
       });
 
       stream.on('end', () => {
@@ -172,10 +180,46 @@ export class CAFSerializer {
         resolve(true);
       });
 
+      // Set up timeout protection
+      const timeoutMs = 300000; // 5 minutes timeout
+      const timeoutId = setTimeout(() => {
+        console.error(`CAF: Timeout after ${timeoutMs}ms for ${filePath}`);
+        cleanup();
+        reject(new Error(`Stream timeout after ${timeoutMs}ms for ${filePath}`));
+      }, timeoutMs);
+
+      // Clear timeout on completion
+      const originalCleanup = cleanup;
+      cleanup = () => {
+        clearTimeout(timeoutId);
+        originalCleanup();
+      };
+
+      // Handle writeStream errors
+      const onWriteStreamError = (error: Error) => {
+        console.error(`CAF: WriteStream error for ${filePath}:`, error);
+        cleanup();
+        reject(error);
+      };
+
       // Pipe the stream directly to the CAF write stream
       console.log(`CAF: Starting pipe for ${filePath}`);
       if (this.writeStream && !this.writeStream.destroyed) {
+        // Add error handler to writeStream
+        this.writeStream.once('error', onWriteStreamError);
+        
+        // Handle pipe completion and errors
         stream.pipe(this.writeStream, { end: false });
+        console.log(`CAF: Pipe established for ${filePath}, waiting for data...`);
+        
+        // Clean up writeStream error handler when done
+        stream.once('end', () => {
+          this.writeStream.removeListener('error', onWriteStreamError);
+        });
+        
+        stream.once('error', () => {
+          this.writeStream.removeListener('error', onWriteStreamError);
+        });
       } else {
         cleanup();
         reject(new Error('Write stream has been destroyed'));
@@ -292,6 +336,20 @@ export class CAFSerializer {
    */
   public getFileList(): string[] {
     return Object.keys(this.fileIndex);
+  }
+
+  /**
+   * Gets the current size limit in bytes
+   */
+  public getMaxSize(): number {
+    return this.maxChunkSize;
+  }
+
+  /**
+   * Gets the current size limit in GB
+   */
+  public getMaxSizeGB(): number {
+    return this.maxChunkSize / (1024 * 1024 * 1024);
   }
 }
 

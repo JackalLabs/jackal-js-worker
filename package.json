@@ -5,6 +5,7 @@
   "scripts": {
     "test": "ts-node src/cafTest.ts",
     "test:quick": "ts-node -e \"import('./src/cafTest').then(m => new m.CAFTester('./test-files').quickTest().then(r => console.log('Quick test:', r ? 'PASSED' : 'FAILED')))\"",
+    "test:db": "ts-node src/testDb.ts",
     "build": "tsc",
     "start": "ts-node src/main.ts",
     "dev": "ts-node-dev src/main.ts"
@@ -17,8 +18,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.815.0",
     "@jackallabs/jackal.js": "^3.6.5",
+    "@types/pg": "^8.15.5",
     "amqplib": "^0.10.7",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@btmills/prettier": "^3.3.3",
