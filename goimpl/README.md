@@ -49,12 +49,63 @@ You can specify a custom version when building:
 VERSION=v1.0.0 ./build.sh
 ```
 
-### Automated Builds
+### Development
+
+#### Linting and Formatting
+Use the provided lint script to format and lint the code:
+
+```bash
+./lint.sh
+```
+
+This script will:
+- Install `gofumpt` and `golangci-lint` if they're not already installed
+- Format all Go code using `gofumpt` (more strict than `gofmt`)
+- Run `golangci-lint` to check for common issues and style problems
+
+#### Automated Builds
 The project includes GitHub Actions for automated nightly builds. See [.github/workflows/README.md](../.github/workflows/README.md) for details.
 
 ## Usage
 
 The CLI provides several commands for working with CAF archives:
+
+### Create CAF Archive
+
+```bash
+./cafcli create <output-file> <input-paths...> [flags]
+```
+
+Create a new CAF archive from files and directories.
+
+**Examples:**
+```bash
+# Create archive from a single file
+./cafcli create archive.caf document.pdf
+
+# Create archive from multiple files
+./cafcli create archive.caf file1.txt file2.txt data.json
+
+# Create archive from a directory (scans one level deep)
+./cafcli create archive.caf my_documents/
+
+# Create archive with custom settings
+./cafcli create archive.caf documents/ --max-size 10 --verbose
+
+# Use custom base directory for relative paths
+./cafcli create archive.caf docs/file1.txt docs/file2.txt --base-dir docs
+```
+
+**Flags:**
+- `--max-size, -s`: Maximum archive size in GB (default: 30)
+- `--verbose, -v`: Show detailed progress information
+- `--base-dir, -b`: Base directory for relative paths (default: current directory)
+
+**Notes:**
+- Directories are scanned one level deep only (subdirectories are skipped)
+- Duplicate files are automatically avoided
+- Files maintain their relative paths in the archive
+- Archive creation stops if size limit would be exceeded
 
 ### List Files in Archive
 

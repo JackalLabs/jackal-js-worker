@@ -291,7 +291,7 @@ func (d *CAFDeserializer) LoadIndex() error {
 	if err != nil {
 		return fmt.Errorf("failed to open archive file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Read footer (last 4 bytes)
 	footerBuffer := make([]byte, 4)
@@ -360,7 +360,7 @@ func (d *CAFDeserializer) ExtractFile(filePath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open archive file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	_, err = file.ReadAt(buffer, fileMetadata.StartByte)
 	if err != nil {
@@ -379,11 +379,11 @@ func (d *CAFDeserializer) ExtractFileToPath(filePath string, outputPath string) 
 
 	// Ensure output directory exists
 	outputDir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	return os.WriteFile(outputPath, fileData, 0644)
+	return os.WriteFile(outputPath, fileData, 0o644)
 }
 
 // ExtractAll extracts all files from the archive to a directory
@@ -393,7 +393,7 @@ func (d *CAFDeserializer) ExtractAll(outputDir string) error {
 	}
 
 	// Ensure output directory exists
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -403,7 +403,7 @@ func (d *CAFDeserializer) ExtractAll(outputDir string) error {
 
 		// Ensure subdirectories exist
 		fileDir := filepath.Dir(outputPath)
-		if err := os.MkdirAll(fileDir, 0755); err != nil {
+		if err := os.MkdirAll(fileDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create file directory: %w", err)
 		}
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	caf "cafcli/impl"
@@ -16,6 +17,12 @@ var (
 	commit  = "unknown"
 	date    = "unknown"
 )
+
+// FileToArchive represents a file to be added to the archive
+type FileToArchive struct {
+	SourcePath  string // Path to the file on disk
+	ArchivePath string // Path to store in the archive
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "cafcli",
@@ -251,6 +258,89 @@ var statsCmd = &cobra.Command{
 	},
 }
 
+var createCmd = &cobra.Command{
+	Use:   "create <output-file> <input-paths...>",
+	Short: "Create a CAF archive from files and directories",
+	Long: `Creates a new CAF archive from the specified files and directories.
+Files are added to the archive preserving their relative paths.
+Directories are scanned one level deep for files.`,
+	Args: cobra.MinimumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		outputPath := args[0]
+		inputPaths := args[1:]
+
+		// Get flags
+		maxSizeGB, _ := cmd.Flags().GetInt("max-size")
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		baseDir, _ := cmd.Flags().GetString("base-dir")
+
+		if verbose {
+			fmt.Printf("Creating CAF archive: %s\n", outputPath)
+			fmt.Printf("Max size: %d GB\n", maxSizeGB)
+			if baseDir != "" {
+				fmt.Printf("Base directory: %s\n", baseDir)
+			}
+		}
+
+		// Collect all files to archive
+		filesToArchive, err := collectFiles(inputPaths, baseDir, verbose)
+		if err != nil {
+			return fmt.Errorf("failed to collect files: %w", err)
+		}
+
+		if len(filesToArchive) == 0 {
+			return fmt.Errorf("no files found to archive")
+		}
+
+		if verbose {
+			fmt.Printf("Found %d files to archive\n", len(filesToArchive))
+		}
+
+		// Create serializer
+		serializer, err := caf.NewCAFSerializer(outputPath, maxSizeGB)
+		if err != nil {
+			return fmt.Errorf("failed to create serializer: %w", err)
+		}
+		defer func() { _ = serializer.Cleanup() }()
+
+		// Add files to archive
+		filesAdded := 0
+		for _, fileInfo := range filesToArchive {
+			if verbose {
+				fmt.Printf("Adding: %s -> %s\n", fileInfo.SourcePath, fileInfo.ArchivePath)
+			}
+
+			added, err := serializer.AddFileFromPath(fileInfo.ArchivePath, fileInfo.SourcePath)
+			if err != nil {
+				return fmt.Errorf("failed to add file '%s': %w", fileInfo.SourcePath, err)
+			}
+
+			if !added {
+				fmt.Printf("Warning: File '%s' skipped (would exceed size limit)\n", fileInfo.SourcePath)
+				break
+			}
+
+			filesAdded++
+		}
+
+		if filesAdded == 0 {
+			return fmt.Errorf("no files were added to the archive")
+		}
+
+		// Finalize archive
+		finalPath, err := serializer.Finalize()
+		if err != nil {
+			return fmt.Errorf("failed to finalize archive: %w", err)
+		}
+
+		fmt.Printf("Successfully created CAF archive: %s\n", finalPath)
+		fmt.Printf("Files added: %d/%d\n", filesAdded, len(filesToArchive))
+		fmt.Printf("Archive size: %d bytes\n", serializer.GetCurrentSize())
+
+		return nil
+	},
+}
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version information",
@@ -265,6 +355,7 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	// Add commands to root
+	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(splitCmd)
 	rootCmd.AddCommand(extractCmd)
@@ -273,8 +364,139 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	// Add flags
+	createCmd.Flags().IntP("max-size", "s", 30, "Maximum archive size in GB")
+	createCmd.Flags().BoolP("verbose", "v", false, "Show detailed progress information")
+	createCmd.Flags().StringP("base-dir", "b", "", "Base directory for relative paths (default: current directory)")
+
 	splitCmd.Flags().StringP("output", "o", "", "Output directory for extracted files (default: extracted_files)")
 	statsCmd.Flags().BoolP("verbose", "v", false, "Show detailed file information")
+}
+
+// collectFiles gathers all files to be archived from the input paths
+func collectFiles(inputPaths []string, baseDir string, verbose bool) ([]FileToArchive, error) {
+	var files []FileToArchive
+	seen := make(map[string]bool) // Prevent duplicate files
+
+	// Use current directory as base if not specified
+	if baseDir == "" {
+		var err error
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current directory: %w", err)
+		}
+	}
+
+	// Make baseDir absolute
+	baseDir, err := filepath.Abs(baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve base directory: %w", err)
+	}
+
+	for _, inputPath := range inputPaths {
+		// Make input path absolute
+		absPath, err := filepath.Abs(inputPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve path '%s': %w", inputPath, err)
+		}
+
+		// Check if path exists
+		info, err := os.Stat(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to access path '%s': %w", inputPath, err)
+		}
+
+		if info.IsDir() {
+			// Scan directory (one level deep only)
+			dirFiles, err := collectFromDirectory(absPath, baseDir, verbose)
+			if err != nil {
+				return nil, fmt.Errorf("failed to scan directory '%s': %w", inputPath, err)
+			}
+
+			// Add files, avoiding duplicates
+			for _, file := range dirFiles {
+				if !seen[file.SourcePath] {
+					files = append(files, file)
+					seen[file.SourcePath] = true
+				}
+			}
+		} else {
+			// Single file
+			archivePath, err := getArchivePath(absPath, baseDir)
+			if err != nil {
+				return nil, fmt.Errorf("failed to determine archive path for '%s': %w", inputPath, err)
+			}
+
+			if !seen[absPath] {
+				files = append(files, FileToArchive{
+					SourcePath:  absPath,
+					ArchivePath: archivePath,
+				})
+				seen[absPath] = true
+			}
+		}
+	}
+
+	return files, nil
+}
+
+// collectFromDirectory scans a directory one level deep for files
+func collectFromDirectory(dirPath, baseDir string, verbose bool) ([]FileToArchive, error) {
+	var files []FileToArchive
+
+	if verbose {
+		fmt.Printf("Scanning directory: %s\n", dirPath)
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// Skip subdirectories (only scan one level deep)
+			if verbose {
+				fmt.Printf("Skipping subdirectory: %s\n", entry.Name())
+			}
+			continue
+		}
+
+		// Regular file
+		filePath := filepath.Join(dirPath, entry.Name())
+		archivePath, err := getArchivePath(filePath, baseDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine archive path for '%s': %w", filePath, err)
+		}
+
+		files = append(files, FileToArchive{
+			SourcePath:  filePath,
+			ArchivePath: archivePath,
+		})
+
+		if verbose {
+			fmt.Printf("Found file: %s -> %s\n", filePath, archivePath)
+		}
+	}
+
+	return files, nil
+}
+
+// getArchivePath determines the path to use for a file within the archive
+func getArchivePath(filePath, baseDir string) (string, error) {
+	// Try to make the path relative to baseDir
+	relPath, err := filepath.Rel(baseDir, filePath)
+	if err != nil {
+		// If we can't make it relative, use just the filename
+		return filepath.Base(filePath), nil
+	}
+
+	// If the relative path goes up (..), use just the filename
+	if strings.HasPrefix(relPath, "..") {
+		return filepath.Base(filePath), nil
+	}
+
+	// Use the relative path, ensuring forward slashes for consistency
+	return filepath.ToSlash(relPath), nil
 }
 
 func main() {
