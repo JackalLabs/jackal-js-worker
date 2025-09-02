@@ -125,6 +125,68 @@ export class localJjs {
     return new Uint8Array(buffer)
   }
 
+  async downloadCAFFromJackal(cafFileName: string, outputPath: string): Promise<void> {
+    try {
+      // Download the file from Jackal storage
+      const filePath = `${this.workingHome}/${cafFileName}`
+      console.log(`Downloading CAF from Jackal: ${filePath}`)
+      
+      // Create a tracker for download progress
+      const tracker = { progress: 0, chunks: [] }
+      
+      // Download the file from Jackal
+      console.log(`Starting download from Jackal storage handler...`)
+      const fileData = await this.sH.downloadFile(filePath, tracker)
+      console.log(`Downloaded file data type: ${typeof fileData}, size: ${fileData?.size || 'unknown'}`)
+      console.log(`File data constructor: ${fileData?.constructor?.name || 'unknown'}`)
+      console.log(`File data keys: ${fileData ? Object.keys(fileData) : 'none'}`)
+      
+      // Validate that we got file data
+      if (!fileData) {
+        throw new Error(`No file data returned from Jackal for: ${filePath}`)
+      }
+      
+      if (fileData.size === 0) {
+        throw new Error(`File is empty in Jackal storage: ${filePath}`)
+      }
+      
+      // Convert File to Buffer
+      const arrayBuffer = await fileData.arrayBuffer()
+      console.log(`ArrayBuffer size: ${arrayBuffer.byteLength} bytes`)
+      
+      if (arrayBuffer.byteLength === 0) {
+        throw new Error(`ArrayBuffer is empty for file: ${filePath}`)
+      }
+      
+      const buffer = Buffer.from(arrayBuffer)
+      console.log(`Buffer size: ${buffer.length} bytes`)
+      
+      if (buffer.length === 0) {
+        throw new Error(`Buffer is empty for file: ${filePath}`)
+      }
+      
+      // Write the file to the specified output path
+      const fs = await import('fs')
+      await fs.promises.writeFile(outputPath, buffer)
+      
+      // Verify the written file
+      const stats = await fs.promises.stat(outputPath)
+      console.log(`Written file size: ${stats.size} bytes`)
+      
+      if (stats.size === 0) {
+        throw new Error(`Written file is empty: ${outputPath}`)
+      }
+      
+      if (stats.size !== buffer.length) {
+        throw new Error(`File size mismatch: expected ${buffer.length}, got ${stats.size}`)
+      }
+      
+      console.log(`Successfully downloaded CAF from Jackal: ${cafFileName} -> ${outputPath} (${stats.size} bytes)`)
+    } catch (err) {
+      console.error(`Failed to download CAF from Jackal: ${cafFileName}`, err)
+      throw err
+    }
+  }
 
 }
 

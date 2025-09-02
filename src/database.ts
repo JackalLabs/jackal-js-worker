@@ -17,6 +17,7 @@ export interface JackalFile {
   file_path: string
   task_id: string
   bundle_id: string
+  js_worker_id: string
   created_at: Date
   updated_at: Date
 }
@@ -164,15 +165,15 @@ class Database {
     }
   }
 
-  async saveJackalFile(filePath: string, taskId: string, bundleId: string): Promise<JackalFile> {
+  async saveJackalFile(filePath: string, taskId: string, bundleId: string, jsWorkerId: string): Promise<JackalFile> {
     if (!this.client) {
       throw new Error('Database not connected')
     }
 
     try {
       const result = await this.client.query(
-        'INSERT INTO jackal_files (file_path, task_id, bundle_id, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *',
-        [filePath, taskId, bundleId]
+        'INSERT INTO jackal_files (file_path, task_id, bundle_id, js_worker_id, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
+        [filePath, taskId, bundleId, jsWorkerId]
       )
 
       return result.rows[0] as JackalFile

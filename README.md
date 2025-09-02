@@ -73,6 +73,11 @@ The worker now requires the following environment variables:
 - `DB_CERT`: Path to SSL client certificate (if using SSL)
 - `DB_KEY`: Path to SSL client key (if using SSL)
 
+#### Web Server Configuration
+- `WEB_SERVER_PORT`: Port for the web server (calculated as 6700 + JACKAL_WORKER_ID)
+- `TEMP_DIR`: Directory for temporary CAF files (default: /tmp/caf-temp)
+- `DOWNLOAD_TIMEOUT_MS`: Timeout for file downloads in milliseconds (default: 300000)
+
 ### Database Setup
 
 The worker expects a `jackal_workers` table with the following structure:
@@ -113,6 +118,7 @@ This will:
 - Connect to the PostgreSQL database
 - Retrieve the seedphrase for the specified worker ID
 - Initialize the Jackal client with the database seedphrase
+- Start the web server for file retrieval
 - Connect to RabbitMQ
 - Listen for messages on "jackal_save" queue
 - Process files and upload them to Jackal storage
@@ -138,3 +144,25 @@ Make sure to set the `JACKAL_WORKER_ID` environment variable in your `.env` file
 - Retrieves seedphrase from `jackal_workers.seed` field
 - Supports multiple workers with different seedphrases
 - More secure and manageable for production deployments
+
+## Web Server
+
+The worker now includes an Express web server that provides HTTP endpoints for retrieving files from CAF bundles. See [WEB_SERVER.md](./WEB_SERVER.md) for detailed documentation.
+
+### Quick Start
+
+Once the worker is running, you can access:
+
+- **Health Check**: `http://localhost:6701/health` (for worker ID 1)
+- **File Download**: `http://localhost:6701/file/:taskId/:filePath`
+- **File Info**: `http://localhost:6701/file-info/:taskId/:filePath`
+
+The port is calculated as `6700 + JACKAL_WORKER_ID`, so worker ID 1 runs on port 6701, worker ID 2 on port 6702, etc.
+
+### Docker Configuration
+
+The Dockerfile includes:
+- Web server port calculation (6700 + JACKAL_WORKER_ID)
+- Health check endpoint with dynamic port
+- Environment variable configuration
+- Temporary directory setup for CAF files

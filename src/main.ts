@@ -4,6 +4,8 @@ import { localJjs } from './jackalClient'
 import { CAFSerializer } from './cafSerializer'
 import { wasabiClient } from './wasabiClient'
 import { database } from './database'
+import { WebServer } from './webServer'
+import { hostname } from 'os'
 
 dotenv.config()
 
@@ -24,10 +26,14 @@ const prefetch = 1000
   private currentCAF: CAFSerializer | null = null
   private pendingMessages: PendingMessage[] = []
   private inactivityTimer: NodeJS.Timeout | null = null
-  private readonly INACTIVITY_TIMEOUT_MS = 30000 // 10 seconds
+  private readonly INACTIVITY_TIMEOUT_MS = 300000 // 5 minutes
+  private readonly workerId: string
 
     constructor(jjs: localJjs) {
       this.jjs = jjs
+      // Use the numeric worker ID from environment variable
+      this.workerId = process.env.JACKAL_WORKER_ID || '1'
+      console.log(`Worker ID: ${this.workerId}`)
     }
 
     /**
@@ -176,8 +182,8 @@ const prefetch = 1000
 
           // Save JackalFile entry to database
           try {
-            await this.database.saveJackalFile(filePath, taskId, cafFileName)
-            console.log(`Saved JackalFile entry: ${filePath} -> ${cafFileName}`)
+            await this.database.saveJackalFile(filePath, taskId, cafFileName, this.workerId)
+            console.log(`Saved JackalFile entry: ${filePath} -> ${cafFileName} (worker: ${this.workerId})`)
           } catch (err) {
             console.error(`Failed to save JackalFile entry for ${filePath}:`, err)
           }
@@ -212,6 +218,30 @@ const prefetch = 1000
   async function main() {
     const jjs = await localJjs.init()
     const queueName = 'jackal_save'
+    
+    // Calculate web server port based on worker ID (6700 + workerID)
+    const workerId = parseInt(process.env.JACKAL_WORKER_ID || '1')
+    const webServerPort = 6700 + workerId
+    
+    // Start web server
+    const webServer = new WebServer(webServerPort)
+    await webServer.start()
+
+    // Handle graceful shutdown
+    process.on('SIGINT', async () => {
+      console.log('Received SIGINT, shutting down gracefully...')
+      try {
+        // Stop web server
+        await webServer.stop()
+        console.log('Web server stopped')
+        
+        await database.disconnect()
+        console.log('Database disconnected')
+      } catch (err) {
+        console.error('Error during shutdown:', err)
+      }
+      process.exit(0)
+    })
 
     while (true) {
       try {
@@ -248,23 +278,6 @@ const prefetch = 1000
           console.log(`[x] Waiting for messages in ${queueName}. To exit press CTRL+C \n`)
 
           const batchProcessor = new CAFBatchProcessor(jjs)
-
-          // Handle graceful shutdown
-          process.on('SIGINT', async () => {
-            console.log('Received SIGINT, shutting down gracefully...')
-            try {
-              // Cleanup batch processor
-              batchProcessor.cleanup()
-              console.log('Batch processor cleaned up')
-              
-              await database.disconnect()
-              console.log('Database disconnected')
-            } catch (err) {
-              console.error('Error disconnecting from database:', err)
-            }
-            connection.close()
-            process.exit(0)
-          })
 
           // Simple semaphore to ensure sequential processing
           let isProcessing = false
