@@ -12,6 +12,15 @@ export interface JackalWorker {
   updated_at: Date
 }
 
+export interface JackalFile {
+  id: number
+  file_path: string
+  task_id: string
+  bundle_id: string
+  created_at: Date
+  updated_at: Date
+}
+
 class Database {
   private client: Client | null = null
 
@@ -151,6 +160,24 @@ class Database {
       return result.rows[0] as JackalWorker
     } catch (error) {
       console.error('Failed to get Jackal worker by address:', error)
+      throw error
+    }
+  }
+
+  async saveJackalFile(filePath: string, taskId: string, bundleId: string): Promise<JackalFile> {
+    if (!this.client) {
+      throw new Error('Database not connected')
+    }
+
+    try {
+      const result = await this.client.query(
+        'INSERT INTO jackal_files (file_path, task_id, bundle_id, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *',
+        [filePath, taskId, bundleId]
+      )
+
+      return result.rows[0] as JackalFile
+    } catch (error) {
+      console.error('Failed to save Jackal file:', error)
       throw error
     }
   }

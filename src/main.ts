@@ -20,6 +20,7 @@ const prefetch = 1000
 
   class CAFBatchProcessor {
   private jjs: localJjs
+  private database = database
   private currentCAF: CAFSerializer | null = null
   private pendingMessages: PendingMessage[] = []
   private inactivityTimer: NodeJS.Timeout | null = null
@@ -168,8 +169,19 @@ const prefetch = 1000
         await this.jjs.uploadCAFToJackal(cafFileName, cafPath)
         console.log(`CAF uploaded to Jackal: ${cafFileName}`)
 
-        // Acknowledge all pending messages
+        // Acknowledge all pending messages and save to database
         for (const pendingMsg of currentMessages) {
+          const filePath = pendingMsg.filePath
+          const taskId = pendingMsg.taskId
+
+          // Save JackalFile entry to database
+          try {
+            await this.database.saveJackalFile(filePath, taskId, cafFileName)
+            console.log(`Saved JackalFile entry: ${filePath} -> ${cafFileName}`)
+          } catch (err) {
+            console.error(`Failed to save JackalFile entry for ${filePath}:`, err)
+          }
+
           channel.ack(pendingMsg.msg)
         }
         console.log(`Acknowledged ${currentMessages.length} messages`)
