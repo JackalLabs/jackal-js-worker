@@ -1,12 +1,18 @@
 import { IClientSetup } from '@jackallabs/jackal.js'
 
+// Environment variables with fallbacks
+const JACKAL_RPC_URL = process.env.JACKAL_RPC_URL || 'https://rpc.jackalprotocol.com'
+const JACKAL_API_URL = process.env.JACKAL_API_URL || 'https://api.jackalprotocol.com'
+const JACKAL_TESTNET_RPC_URL = process.env.JACKAL_TESTNET_RPC_URL || 'https://testnet-rpc.jackalprotocol.com'
+const JACKAL_TESTNET_API_URL = process.env.JACKAL_TESTNET_API_URL || 'https://testnet-api.jackalprotocol.com'
+
 export const mainnetChainID = 'jackal-1'
 export const mainnet: IClientSetup = {
   chainConfig: {
     chainId: mainnetChainID,
     chainName: 'Jackal Mainnet',
-    rpc: 'https://rpc.jackalprotocol.com',
-    rest: 'https://api.jackalprotocol.com',
+    rpc: JACKAL_RPC_URL,
+    rest: JACKAL_API_URL,
     bip44: {
       coinType: 118,
     },
@@ -45,7 +51,7 @@ export const mainnet: IClientSetup = {
     features: [],
   },
   chainId: mainnetChainID,
-  endpoint: 'https://rpc.jackalprotocol.com',
+  endpoint: JACKAL_RPC_URL,
   options: {},
   networks: ['jackal'],
 }
@@ -55,8 +61,8 @@ export const testnet: IClientSetup = {
   chainConfig: {
     chainId: testnetChainID,
     chainName: 'Jackal Testnet',
-    rpc: 'https://testnet-rpc.jackalprotocol.com',
-    rest: 'https://testnet-api.jackalprotocol.com',
+    rpc: JACKAL_TESTNET_RPC_URL,
+    rest: JACKAL_TESTNET_API_URL,
     bip44: {
       coinType: 118,
     },
@@ -95,7 +101,7 @@ export const testnet: IClientSetup = {
     features: [],
   },
   chainId: testnetChainID,
-  endpoint: 'https://testnet-rpc.jackalprotocol.com',
+  endpoint: JACKAL_TESTNET_RPC_URL,
   options: {},
   networks: ['jackaltest'],
 }

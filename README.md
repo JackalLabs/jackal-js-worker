@@ -23,6 +23,29 @@ This project consists of two main components:
 - PostgreSQL database with `jackal_workers` table
 - Access to a Jackal storage network (testnet configuration included)
 
+## Environment Variables
+
+The following environment variables can be used to configure Jackal Protocol endpoints:
+
+### Mainnet Configuration
+- `JACKAL_RPC_URL`: Mainnet RPC endpoint (default: `https://rpc.jackalprotocol.com`)
+- `JACKAL_API_URL`: Mainnet API endpoint (default: `https://api.jackalprotocol.com`)
+
+### Testnet Configuration
+- `JACKAL_TESTNET_RPC_URL`: Testnet RPC endpoint (default: `https://testnet-rpc.jackalprotocol.com`)
+- `JACKAL_TESTNET_API_URL`: Testnet API endpoint (default: `https://testnet-api.jackalprotocol.com`)
+
+### Example Usage
+```bash
+# Use custom mainnet endpoints
+export JACKAL_RPC_URL="https://custom-rpc.jackalprotocol.com"
+export JACKAL_API_URL="https://custom-api.jackalprotocol.com"
+
+# Use custom testnet endpoints
+export JACKAL_TESTNET_RPC_URL="https://custom-testnet-rpc.jackalprotocol.com"
+export JACKAL_TESTNET_API_URL="https://custom-testnet-api.jackalprotocol.com"
+```
+
 ## Installation
 
 1. Clone this repository
