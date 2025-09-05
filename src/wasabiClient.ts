@@ -11,6 +11,7 @@ export class WasabiClient {
   constructor() {
     this.bucket = process.env.WASABI_BUCKET || ''
     this.region = process.env.WASABI_REGION || 'ca-central-1'
+    const endpoint = process.env.WASABI_ENDPOINT || 'https://s3.ca-central-1.wasabisys.com'
     
     if (!process.env.WASABI_ACCESS || !process.env.WASABI_SECRET) {
       throw new Error('WASABI_ACCESS and WASABI_SECRET environment variables are required')
@@ -23,11 +24,11 @@ export class WasabiClient {
         accessKeyId: process.env.WASABI_ACCESS,
         secretAccessKey: process.env.WASABI_SECRET,
       },
-      endpoint: 'https://s3.ca-central-1.wasabisys.com', // Wasabi endpoint
-      forcePathStyle: true, // Required for Wasabi
+      endpoint: endpoint, // Configurable endpoint (Wasabi or MinIO)
+      forcePathStyle: true, // Required for Wasabi/MinIO
     })
 
-    console.log(`Wasabi client initialized for region: ${this.region}`)
+    console.log(`Wasabi client initialized for region: ${this.region}, endpoint: ${endpoint}`)
   }
 
   /**
