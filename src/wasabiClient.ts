@@ -10,14 +10,14 @@ export class WasabiClient {
 
   constructor() {
     this.bucket = process.env.WASABI_BUCKET || ''
-    this.region = process.env.WASABI_REGION || 'ca-central-1'
-    const endpoint = process.env.WASABI_ENDPOINT || 'https://s3.ca-central-1.wasabisys.com'
+    this.region = process.env.WASABI_REGION || 'us-east-1' // Default to us-east-1 for MinIO compatibility
+    const endpoint = process.env.WASABI_ENDPOINT || 'http://localhost:9000' // Default to MinIO local endpoint
     
     if (!process.env.WASABI_ACCESS || !process.env.WASABI_SECRET) {
       throw new Error('WASABI_ACCESS and WASABI_SECRET environment variables are required')
     }
 
-    // Initialize S3 client with Wasabi configuration
+    // Initialize S3 client with Wasabi/MinIO configuration
     this.client = new S3Client({
       region: this.region,
       credentials: {
@@ -28,7 +28,7 @@ export class WasabiClient {
       forcePathStyle: true, // Required for Wasabi/MinIO
     })
 
-    console.log(`Wasabi client initialized for region: ${this.region}, endpoint: ${endpoint}`)
+    console.log(`S3 client initialized for region: ${this.region}, endpoint: ${endpoint}`)
   }
 
   /**
@@ -65,8 +65,8 @@ export class WasabiClient {
       console.log(`Successfully downloaded file: ${filePath}`)
       return buffer
     } catch (error) {
-      console.error(`Failed to download file from bucket=${this.bucket} key=${filePath}:`, error)
-      throw new Error(`Failed to download file from bucket=${this.bucket} key=${filePath}: ${error}`)
+      console.error(`Failed to download file from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}:`, error)
+      throw new Error(`Failed to download file from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}: ${error}`)
     }
   }
 
@@ -103,29 +103,28 @@ export class WasabiClient {
       class AWSStreamReader extends Readable {
         private reader: ReadableStreamDefaultReader<Uint8Array>
         private isReading = false
-        private drainHandler: (() => void) | null = null
+        private isDestroyed = false
         
         constructor(reader: ReadableStreamDefaultReader<Uint8Array>) {
-          super()
+          super({
+            highWaterMark: 64 * 1024, // 64KB buffer
+            objectMode: false
+          })
           this.reader = reader
-          
-          // Set up a single, persistent drain handler
-          this.drainHandler = () => {
-            this.isReading = false
-            this._read()
-          }
           
           // Increase max listeners to prevent warnings during high-throughput scenarios
           this.setMaxListeners(20)
         }
         
         _read() {
-          if (this.isReading) return
+          if (this.isReading || this.isDestroyed) return
           this.isReading = true
           this._readNextChunk()
         }
         
         private async _readNextChunk() {
+          if (this.isDestroyed) return
+          
           try {
             const { done, value } = await this.reader.read()
             if (done) {
@@ -134,16 +133,22 @@ export class WasabiClient {
               return
             }
             
-            // Push the chunk - if buffer is full, this will pause
-            if (!this.push(Buffer.from(value))) {
-              // Add drain listener only if not already present
-              if (this.listenerCount('drain') === 0) {
-                this.on('drain', this.drainHandler!)
-              }
-            } else {
-              // Continue reading next chunk
+            // Push the chunk
+            const buffer = Buffer.from(value)
+            const pushed = this.push(buffer)
+            
+            if (pushed) {
+              // Continue reading next chunk immediately
               this.isReading = false
-              this._readNextChunk()
+              setImmediate(() => this._readNextChunk())
+            } else {
+              // Buffer is full, wait for drain event
+              this.isReading = false
+              this.once('drain', () => {
+                if (!this.isDestroyed) {
+                  this._readNextChunk()
+                }
+              })
             }
           } catch (error) {
             this.isReading = false
@@ -152,10 +157,7 @@ export class WasabiClient {
         }
         
         _destroy(error: Error | null, callback: (error: Error | null) => void) {
-          // Remove drain listener
-          if (this.drainHandler) {
-            this.off('drain', this.drainHandler)
-          }
+          this.isDestroyed = true
           
           // Clean up the reader when stream is destroyed
           if (this.reader) {
@@ -171,8 +173,8 @@ export class WasabiClient {
       console.log(`Successfully created file stream: ${filePath} (${contentLength} bytes)`)
       return { stream, contentLength }
     } catch (error) {
-      console.error(`Failed to download file stream from bucket=${this.bucket} key=${filePath}:`, error)
-      throw new Error(`Failed to download file stream from bucket=${this.bucket} key=${filePath}: ${error}`)
+      console.error(`Failed to download file stream from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}:`, error)
+      throw new Error(`Failed to download file stream from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}: ${error}`)
     }
   }
 

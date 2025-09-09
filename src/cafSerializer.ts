@@ -182,11 +182,27 @@ export class CAFSerializer {
 
       // Set up timeout protection
       const timeoutMs = 300000; // 5 minutes timeout
-      const timeoutId = setTimeout(() => {
-        console.error(`CAF: Timeout after ${timeoutMs}ms for ${filePath}`);
-        cleanup();
-        reject(new Error(`Stream timeout after ${timeoutMs}ms for ${filePath}`));
-      }, timeoutMs);
+      let dataReceived = false;
+      let lastDataTime = Date.now();
+      let timeoutId: NodeJS.Timeout;
+      
+      const startTimeout = () => {
+        timeoutId = setTimeout(() => {
+          console.error(`CAF: Timeout after ${timeoutMs}ms for ${filePath} (data received: ${dataReceived}, last data: ${Date.now() - lastDataTime}ms ago)`);
+          cleanup();
+          reject(new Error(`Stream timeout after ${timeoutMs}ms for ${filePath}`));
+        }, timeoutMs);
+      };
+      
+      // Reset timeout when data is received
+      const resetTimeout = () => {
+        dataReceived = true;
+        lastDataTime = Date.now();
+        clearTimeout(timeoutId);
+        startTimeout();
+      };
+      
+      startTimeout();
 
       // Clear timeout on completion
       const originalCleanup = cleanup;
@@ -208,18 +224,50 @@ export class CAFSerializer {
         // Add error handler to writeStream
         this.writeStream.once('error', onWriteStreamError);
         
+        
+        
+        stream.on('end', () => {
+          console.log(`CAF: Stream ended for ${filePath}`);
+          this.writeStream.removeListener('error', onWriteStreamError);
+        });
+        
+        stream.on('error', (error) => {
+          console.error(`CAF: Stream error for ${filePath}:`, error);
+          this.writeStream.removeListener('error', onWriteStreamError);
+          cleanup();
+          reject(error);
+        });
+        
+        stream.on('close', () => {
+          console.log(`CAF: Stream closed for ${filePath}`);
+        });
+        
         // Handle pipe completion and errors
         stream.pipe(this.writeStream, { end: false });
         console.log(`CAF: Pipe established for ${filePath}, waiting for data...`);
         
-        // Clean up writeStream error handler when done
-        stream.once('end', () => {
-          this.writeStream.removeListener('error', onWriteStreamError);
-        });
+        // Add a check to see if the stream is already ended
+        if ('readableEnded' in stream && stream.readableEnded) {
+          console.log(`CAF: Stream already ended for ${filePath}`);
+          cleanup();
+          resolve(true);
+          return;
+        }
         
-        stream.once('error', () => {
-          this.writeStream.removeListener('error', onWriteStreamError);
-        });
+        // Check if stream is readable
+        if ('readable' in stream && !stream.readable) {
+          console.error(`CAF: Stream is not readable for ${filePath}`);
+          cleanup();
+          reject(new Error(`Stream is not readable for ${filePath}`));
+          return;
+        }
+        
+        // Log stream state
+        const readable = 'readable' in stream ? stream.readable : 'unknown';
+        const destroyed = 'destroyed' in stream ? stream.destroyed : 'unknown';
+        const readableEnded = 'readableEnded' in stream ? stream.readableEnded : 'unknown';
+        console.log(`CAF: Stream state for ${filePath}: readable=${readable}, destroyed=${destroyed}, readableEnded=${readableEnded}`);
+        
       } else {
         cleanup();
         reject(new Error('Write stream has been destroyed'));
