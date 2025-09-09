@@ -12,6 +12,12 @@ dotenv.config()
 const CAF_MAX_SIZE_GB = 1.75
 const CAF_TIMEOUT_MINUTES = parseInt(process.env.CAF_TIMEOUT_MINUTES || '5') // Finalize CAF after X minutes of inactivity
 
+interface PendingMessage {
+  msg: amqp.Message
+  taskId: string
+  filePath: string
+} 
+
 class SimpleCAFProcessor {
   private jjs: localJjs
   private database = database
@@ -20,6 +26,7 @@ class SimpleCAFProcessor {
   private isUploading = false
   private cafTimeout: NodeJS.Timeout | null = null
   private currentChannel: amqp.Channel | null = null
+  private processingMessages: PendingMessage[] = []
 
   constructor(jjs: localJjs) {
     this.jjs = jjs
@@ -83,6 +90,7 @@ class SimpleCAFProcessor {
       return
     }
 
+
     let stream: NodeJS.ReadableStream | null = null
     
     try {
@@ -90,6 +98,8 @@ class SimpleCAFProcessor {
       const msgJson = JSON.parse(messageContent)
       const filePath = msgJson.file_path
       const taskId = msgJson.task_id
+
+      this.processingMessages.push({msg, taskId, filePath})
 
       console.log(`Processing: ${filePath}`)
 
@@ -188,6 +198,19 @@ class SimpleCAFProcessor {
       const cafPath = await currentCAF.finalize()
       console.log(`CAF archive finalized: ${cafPath}`)
       console.log(`Archive contains ${currentCAF.getFileList().length} files`)
+
+
+
+      // Acknowledge all messages in the batch
+      for (const msg of this.processingMessages) {
+        // Save JackalFile entry to database
+        try {
+          await this.database.saveJackalFile(msg.taskId, msg.filePath, cafPath, this.workerId)
+        } catch (err) {
+          console.error(`Failed to save JackalFile entry for ${msg.filePath}:`, err)
+        }
+      }
+      this.processingMessages = []
 
       // Upload CAF to Jackal
       const cafFileName = `batch_${Date.now()}.caf`
