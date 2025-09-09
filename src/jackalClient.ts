@@ -47,6 +47,7 @@ export async function initJackal() {
       mnemonic: worker.seed,
     }
   }
+  console.log('Using Jackal.js client package:', pkg)
 
   console.log('Using seedphrase from database')
 
