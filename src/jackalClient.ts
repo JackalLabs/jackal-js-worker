@@ -6,11 +6,14 @@ import {
   TWalletExtensionNames,
 } from '@jackallabs/jackal.js'
 import dotenv from 'dotenv'
-import { mainnet, testnet } from './config'
+import { mainnet, mainnetChainID, testnet } from './config'
 import { wasabiClient } from './wasabiClient'
 import { database } from './database'
 
 dotenv.config()
+
+const JACKAL_RPC_URL = process.env.JACKAL_RPC_URL || 'https://rpc.jackalprotocol.com'
+
 
 export async function initJackal() {
   let clientHandler: IClientHandler
@@ -112,7 +115,40 @@ export class localJjs {
     const file = new File([new Uint8Array(cafData)], cafFileName)
     try {
       await this.sH.queuePrivate([file])
-      await this.sH.processAllQueues()
+      await this.sH.processAllQueues({
+        socketOverrides: {
+          'jackal': {
+            chainId: mainnetChainID,
+            endpoint: JACKAL_RPC_URL,
+            gasMultiplier: 1.0,
+          },
+          'jackaltest': {
+            chainId: mainnetChainID,
+            endpoint: JACKAL_RPC_URL,
+            gasMultiplier: 1.0,
+          },
+          'jackallocal': {
+            chainId: mainnetChainID,
+            endpoint: JACKAL_RPC_URL,
+            gasMultiplier: 1.0,
+          },
+          'archway': {
+            chainId: mainnetChainID,
+            endpoint: JACKAL_RPC_URL,
+            gasMultiplier: 1.0,
+          },
+          'archwaytest': {
+            chainId: mainnetChainID,
+            endpoint: JACKAL_RPC_URL,
+            gasMultiplier: 1.0,
+          },
+          'wasm': {
+            chainId: mainnetChainID,
+            endpoint: JACKAL_RPC_URL,
+            gasMultiplier: 1.0,
+          },
+        }
+      })
       console.log(`Successfully uploaded CAF to Jackal: ${cafFileName}`)
     } catch (err) {
       console.warn('Failed to upload CAF to Jackal')

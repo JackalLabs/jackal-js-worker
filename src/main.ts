@@ -192,6 +192,7 @@ class SimpleCAFProcessor {
     const currentCAF = this.currentCAF
     this.currentCAF = null
     this.currentChannel = null // Clear channel reference
+    const cafFileName = `batch_${Date.now()}.caf`
 
     try {
       // Finalize the CAF archive
@@ -205,7 +206,7 @@ class SimpleCAFProcessor {
       for (const msg of this.processingMessages) {
         // Save JackalFile entry to database
         try {
-          await this.database.saveJackalFile(msg.taskId, msg.filePath, cafPath, this.workerId)
+          await this.database.saveJackalFile(msg.filePath, msg.taskId, cafFileName, this.workerId)
         } catch (err) {
           console.error(`Failed to save JackalFile entry for ${msg.filePath}:`, err)
         }
@@ -213,7 +214,6 @@ class SimpleCAFProcessor {
       this.processingMessages = []
 
       // Upload CAF to Jackal
-      const cafFileName = `batch_${Date.now()}.caf`
       await this.jjs.uploadCAFToJackal(cafFileName, cafPath)
       console.log(`CAF uploaded to Jackal: ${cafFileName}`)
 
