@@ -3,6 +3,47 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
+/**
+ * Sanitizes a path for S3 compatibility by replacing special characters
+ * with their text equivalents to avoid S3 key issues
+ * @param path - The path to sanitize
+ * @returns The sanitized path safe for S3 keys
+ */
+function sanitizeS3Path(path: string): string {
+  const replacements: Record<string, string> = {
+    '+': 'PLUS',
+    '=': 'EQUALS',
+    ':': 'COLON',
+    '\\': 'BACKSLASH',
+    '{': 'LBRACE',
+    '}': 'RBRACE',
+    '^': 'CARET',
+    '%': 'PERCENT',
+    '`': 'BACKTICK',
+    '[': 'LBRACKET',
+    ']': 'RBRACKET',
+    '"': 'QUOTE',
+    '~': 'TILDE',
+    '|': 'PIPE',
+    '<': 'LT',
+    '>': 'GT',
+    ';': 'SEMICOLON',
+    ',': 'COMMA',
+    '?': 'QUESTION',
+    '*': 'ASTERISK',
+    '&': 'AMPERSAND',
+    '$': 'DOLLAR',
+    '@': 'AT',
+  }
+  
+  let result = path
+  for (const [oldChar, newChar] of Object.entries(replacements)) {
+    result = result.split(oldChar).join(newChar)
+  }
+  
+  return result
+}
+
 export class WasabiClient {
   private client: S3Client
   private bucket: string
@@ -37,12 +78,13 @@ export class WasabiClient {
    * @returns Promise<Buffer> - The file data as a buffer
    */
   async downloadFile(filePath: string): Promise<Buffer> {
-    console.log(`Downloading file from Wasabi bucket=${this.bucket} key=${filePath}`)
+    const sanitizedPath = sanitizeS3Path(filePath)
+    console.log(`Downloading file from Wasabi bucket=${this.bucket} key=${sanitizedPath} (original: ${filePath})`)
     
     try {
       const command = new GetObjectCommand({
         Bucket: this.bucket,
-        Key: filePath,
+        Key: sanitizedPath,
       })
 
       const response = await this.client.send(command)
@@ -62,11 +104,11 @@ export class WasabiClient {
       }
 
       const buffer = Buffer.concat(chunks)
-      console.log(`Successfully downloaded file: ${filePath}`)
+      console.log(`Successfully downloaded file: ${sanitizedPath}`)
       return buffer
     } catch (error) {
-      console.error(`Failed to download file from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}:`, error)
-      throw new Error(`Failed to download file from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}: ${error}`)
+      console.error(`Failed to download file from bucket=${this.bucket} key=${sanitizedPath} endpoint=${this.client.config.endpoint}:`, error)
+      throw new Error(`Failed to download file from bucket=${this.bucket} key=${sanitizedPath} endpoint=${this.client.config.endpoint}: ${error}`)
     }
   }
 
@@ -76,12 +118,13 @@ export class WasabiClient {
    * @returns Promise<{stream: NodeJS.ReadableStream, contentLength: number}> - The file stream and size
    */
   async downloadFileStream(filePath: string): Promise<{stream: NodeJS.ReadableStream, contentLength: number}> {
-    console.log(`Downloading file stream from Wasabi bucket=${this.bucket} key=${filePath}`)
+    const sanitizedPath = sanitizeS3Path(filePath)
+    console.log(`Downloading file stream from Wasabi bucket=${this.bucket} key=${sanitizedPath} (original: ${filePath})`)
     
     try {
       const command = new GetObjectCommand({
         Bucket: this.bucket,
-        Key: filePath,
+        Key: sanitizedPath,
       })
 
       const response = await this.client.send(command)
@@ -93,7 +136,7 @@ export class WasabiClient {
       const contentLength = response.ContentLength || 0
       
       // Create a true streaming implementation that reads chunks on-demand
-      console.log(`Creating streaming reader for: ${filePath}`)
+      console.log(`Creating streaming reader for: ${sanitizedPath}`)
       
       const { Readable } = await import('stream')
       const webStream = response.Body.transformToWebStream()
@@ -168,13 +211,13 @@ export class WasabiClient {
       }
       
       const stream = new AWSStreamReader(reader)
-      console.log(`Stream created, will read chunks on-demand: ${filePath}`)
+      console.log(`Stream created, will read chunks on-demand: ${sanitizedPath}`)
       
-      console.log(`Successfully created file stream: ${filePath} (${contentLength} bytes)`)
+      console.log(`Successfully created file stream: ${sanitizedPath} (${contentLength} bytes)`)
       return { stream, contentLength }
     } catch (error) {
-      console.error(`Failed to download file stream from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}:`, error)
-      throw new Error(`Failed to download file stream from bucket=${this.bucket} key=${filePath} endpoint=${this.client.config.endpoint}: ${error}`)
+      console.error(`Failed to download file stream from bucket=${this.bucket} key=${sanitizedPath} endpoint=${this.client.config.endpoint}:`, error)
+      throw new Error(`Failed to download file stream from bucket=${this.bucket} key=${sanitizedPath} endpoint=${this.client.config.endpoint}: ${error}`)
     }
   }
 
