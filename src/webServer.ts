@@ -56,11 +56,18 @@ interface WebServerConfig {
   keepCafFiles: boolean
 }
 
+interface ProofCacheEntry {
+  proofs: FileProof[]
+  timestamp: number
+}
+
 export class WebServer {
   private app: Application
   private server: Server | null = null
   private readonly config: WebServerConfig
   private jjs: localJjs | null = null
+  private proofCache: Map<string, ProofCacheEntry> = new Map()
+  private readonly CACHE_TTL_MS = 60 * 1000 // 1 minute in milliseconds
 
   constructor(port: number = 3000) {
     this.config = {
@@ -78,6 +85,7 @@ export class WebServer {
     this.app = express()
     this.setupMiddleware()
     this.setupRoutes()
+    this.startCacheCleanup()
   }
 
   private setupMiddleware(): void {
@@ -86,9 +94,30 @@ export class WebServer {
     
     // CORS middleware
     this.app.use((req: Request, res: Response, next: any) => {
-      res.header('Access-Control-Allow-Origin', '*')
+      // Get the origin from the request
+      const origin = req.headers.origin
+      
+      // Define allowed origins (same as the main server)
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://respawnit.com',
+        'https://www.respawnit.com'
+      ]
+      
+      // Check if the origin is allowed
+      if (origin && allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin)
+      } else {
+        // For requests without origin (like direct API calls), allow localhost
+        res.header('Access-Control-Allow-Origin', 'http://localhost:5173')
+      }
+      
+      res.header('Access-Control-Allow-Credentials', 'true')
       res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie')
+      res.header('Access-Control-Expose-Headers', 'Set-Cookie')
+      
       if (req.method === 'OPTIONS') {
         res.sendStatus(200)
       } else {
@@ -409,14 +438,78 @@ export class WebServer {
     }
   }
 
+  private getCacheKey(bundleId: string, filePath: string, taskId: string): string {
+    return `${bundleId}:${filePath}:${taskId}`
+  }
+
+  private isCacheEntryValid(entry: ProofCacheEntry): boolean {
+    const now = Date.now()
+    return (now - entry.timestamp) < this.CACHE_TTL_MS
+  }
+
+  private getCachedProofs(bundleId: string, filePath: string, taskId: string): FileProof[] | null {
+    const cacheKey = this.getCacheKey(bundleId, filePath, taskId)
+    const entry = this.proofCache.get(cacheKey)
+    
+    if (entry && this.isCacheEntryValid(entry)) {
+      console.log(`Cache HIT for bundle: ${bundleId}, file: ${filePath}`)
+      return entry.proofs
+    }
+    
+    if (entry) {
+      console.log(`Cache EXPIRED for bundle: ${bundleId}, file: ${filePath}`)
+      this.proofCache.delete(cacheKey)
+    }
+    
+    return null
+  }
+
+  private setCachedProofs(bundleId: string, filePath: string, taskId: string, proofs: FileProof[]): void {
+    const cacheKey = this.getCacheKey(bundleId, filePath, taskId)
+    this.proofCache.set(cacheKey, {
+      proofs,
+      timestamp: Date.now()
+    })
+    console.log(`Cache SET for bundle: ${bundleId}, file: ${filePath}`)
+  }
+
+  private startCacheCleanup(): void {
+    // Clean up expired cache entries every 30 seconds
+    setInterval(() => {
+      const now = Date.now()
+      let cleanedCount = 0
+      
+      for (const [key, entry] of this.proofCache.entries()) {
+        if (!this.isCacheEntryValid(entry)) {
+          this.proofCache.delete(key)
+          cleanedCount++
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        console.log(`Cache cleanup: removed ${cleanedCount} expired entries. Cache size: ${this.proofCache.size}`)
+      }
+    }, 30000) // Run every 30 seconds
+  }
+
   private async getProofInfoFromJackal(bundleId: string, filePath: string, taskId: string): Promise<FileProof[]> {
     try {
+      // Check cache first
+      const cachedProofs = this.getCachedProofs(bundleId, filePath, taskId)
+      if (cachedProofs) {
+        return cachedProofs
+      }
+
       console.log(`Getting proof info for bundle: ${bundleId}, file: ${filePath}`)
             
       // Extract proof information from the CAF
       const proofs = await this.jjs?.getProofs(bundleId)
+      const result = proofs || []
       
-      return proofs || []
+      // Cache the result
+      this.setCachedProofs(bundleId, filePath, taskId, result)
+      
+      return result
     } catch (error) {
       console.error(`Failed to get proof info for bundle ${bundleId}:`, error)
       throw new Error(`Failed to retrieve proof information: ${error instanceof Error ? error.message : 'Unknown error'}`)
