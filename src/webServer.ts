@@ -102,7 +102,8 @@ export class WebServer {
         'http://localhost:5173',
         'http://localhost:3000',
         'https://respawnit.com',
-        'https://www.respawnit.com'
+        'https://www.respawnit.com',
+        'https://demo.respawnit.com'
       ]
       
       // Check if the origin is allowed
