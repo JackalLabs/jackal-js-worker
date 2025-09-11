@@ -1,3 +1,6 @@
+// Import logger first to replace console.log globally
+// import './logger'
+
 import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import dotenv from 'dotenv'
 

@@ -1,3 +1,6 @@
+// Import logger first to replace console.log globally
+// import './logger'
+
 import express, { Request, Response, Application } from 'express'
 import { Server } from 'http'
 import { database } from './database'
@@ -6,6 +9,7 @@ import { CAFDeserializer } from './cafSerializer'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { hostname } from 'os'
+import { FileProof } from '@jackallabs/jackal.js'
 
 // Type definitions
 interface JackalFileRecord {
@@ -40,6 +44,10 @@ interface ErrorResponse {
   filePath?: string
 }
 
+interface ProofInfoResponse {
+  proofs: FileProof[]
+}
+
 interface WebServerConfig {
   port: number
   workerId: string
@@ -52,6 +60,7 @@ export class WebServer {
   private app: Application
   private server: Server | null = null
   private readonly config: WebServerConfig
+  private jjs: localJjs | null = null
 
   constructor(port: number = 3000) {
     this.config = {
@@ -61,6 +70,10 @@ export class WebServer {
       downloadTimeoutMs: parseInt(process.env.DOWNLOAD_TIMEOUT_MS || '300000'), // 5 minutes
       keepCafFiles: process.env.KEEP_CAF_FILES === 'true' // Default to false (clean up after use)
     }
+
+    localJjs.init().then(jjs =>   {
+      this.jjs = jjs
+    })
     
     this.app = express()
     this.setupMiddleware()
@@ -217,6 +230,57 @@ export class WebServer {
         })
       }
     })
+
+    // Get file proof info endpoint
+    this.app.get('/file-proof/:taskId/:filePath(*)', async (req: Request, res: Response<ProofInfoResponse | ErrorResponse>) => {
+      try {
+        const { taskId, filePath } = req.params
+        
+        // Validate parameters
+        if (!taskId || !filePath) {
+          return res.status(400).json({
+            error: 'Missing required parameters: taskId and filePath'
+          })
+        }
+
+        // Basic validation for taskId (should be alphanumeric)
+        if (!/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+          return res.status(400).json({
+            error: 'Invalid taskId format'
+          })
+        }
+
+        // Basic validation for filePath (should not contain dangerous characters)
+        if (filePath.includes('..') || filePath.includes('~') || filePath.startsWith('/')) {
+          return res.status(400).json({
+            error: 'Invalid filePath format'
+          })
+        }
+
+        const jackalFile = await this.getJackalFileFromDatabase(taskId, filePath)
+        if (!jackalFile) {
+          return res.status(404).json({
+            error: 'File not found in database',
+            taskId,
+            filePath
+          })
+        }
+
+        // Get proof information from Jackal
+        const proofInfo = await this.getProofInfoFromJackal(jackalFile.bundle_id, filePath, taskId)
+
+        res.json({
+          proofs: proofInfo,
+        })
+
+      } catch (error) {
+        console.error('Error getting file proof info:', error)
+        res.status(500).json({
+          error: 'Internal server error',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
   }
 
   private async getJackalFileFromDatabase(taskId: string, filePath: string): Promise<JackalFileRecord | null> {
@@ -254,11 +318,11 @@ export class WebServer {
     }
     
     console.log(`Downloading CAF from Jackal: ${tempCafPath}`)
-    const jjs = await localJjs.init()
+    
 
     try {
       // Add timeout for download operation
-      const downloadPromise = jjs.downloadCAFFromJackal(bundleId, tempCafPath)
+      const downloadPromise = this.jjs?.downloadCAFFromJackal(bundleId, tempCafPath)
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Download timeout')), this.config.downloadTimeoutMs)
       })
@@ -345,6 +409,20 @@ export class WebServer {
     }
   }
 
+  private async getProofInfoFromJackal(bundleId: string, filePath: string, taskId: string): Promise<FileProof[]> {
+    try {
+      console.log(`Getting proof info for bundle: ${bundleId}, file: ${filePath}`)
+            
+      // Extract proof information from the CAF
+      const proofs = await this.jjs?.getProofs(bundleId)
+      
+      return proofs || []
+    } catch (error) {
+      console.error(`Failed to get proof info for bundle ${bundleId}:`, error)
+      throw new Error(`Failed to retrieve proof information: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
   public async start(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       this.server = this.app.listen(this.config.port, () => {
@@ -352,6 +430,8 @@ export class WebServer {
         console.log(`Worker ID: ${this.config.workerId}`)
         console.log(`Health check: http://localhost:${this.config.port}/health`)
         console.log(`File endpoint: http://localhost:${this.config.port}/file/:taskId/:filePath`)
+        console.log(`File info endpoint: http://localhost:${this.config.port}/file-info/:taskId/:filePath`)
+        console.log(`File proof endpoint: http://localhost:${this.config.port}/file-proof/:taskId/:filePath`)
         resolve()
       })
 

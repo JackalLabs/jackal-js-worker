@@ -1,3 +1,6 @@
+// Import logger first to replace console.log globally
+// import './logger'
+
 import amqp from 'amqplib/callback_api'
 import dotenv from 'dotenv'
 import { localJjs } from './jackalClient'

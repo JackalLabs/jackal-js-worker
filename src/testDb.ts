@@ -1,3 +1,6 @@
+// Import logger first to replace console.log globally
+// import './logger'
+
 import dotenv from 'dotenv'
 import { database } from './database'
 

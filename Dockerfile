@@ -4,6 +4,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
+COPY *.tgz ./
 RUN npm install
 
 # Copy source code

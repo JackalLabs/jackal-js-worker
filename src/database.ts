@@ -1,3 +1,6 @@
+// Import logger first to replace console.log globally
+// import './logger'
+
 import { Client } from 'pg'
 import dotenv from 'dotenv'
 import { promises as fs } from 'fs'

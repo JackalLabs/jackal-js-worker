@@ -1,5 +1,9 @@
+// Import logger first to replace console.log globally
+// import './logger'
+
 import {
   ClientHandler,
+  FileProof,
   IClientHandler,
   IStorageHandler,
   StorageHandler,
@@ -12,7 +16,7 @@ import { database } from './database'
 
 dotenv.config()
 
-const JACKAL_RPC_URL = process.env.JACKAL_RPC_URL || 'https://rpc.jackalprotocol.com'
+const JACKAL_WS_URL = process.env.JACKAL_WS_URL || 'wss://rpc.jackalprotocol.com'
 
 
 export async function initJackal() {
@@ -106,6 +110,30 @@ export class localJjs {
     return new localJjs(storageHandler, workingHome)
   }
 
+  async getProofs(cafFileName: string) {
+    let p = { path: `${this.workingHome}` }
+    console.log(`Loading directory`, p)
+    try {
+      await this.sH.loadDirectory(p)
+    } catch (err) {
+      console.error(`Failed to load directory: ${p}`, err)
+    }
+    const filePath = `${this.workingHome}/${cafFileName}`
+
+    let proofs: FileProof[] = []
+    try {
+      console.log(`Downloading CAF from Jackal: ${filePath}`)
+      proofs = await this.sH.getProofTruths(filePath)
+      console.log(`Got proofs from Jackal: ${proofs}`)
+    } catch (err) {
+      console.error(`Failed to get proofs: ${filePath}`, err)
+    }
+
+
+
+    return proofs
+  }
+
 
   async uploadCAFToJackal(cafFileName: string, cafFilePath: string) {
     // Read the CAF file from local filesystem
@@ -119,32 +147,32 @@ export class localJjs {
         socketOverrides: {
           'jackal': {
             chainId: mainnetChainID,
-            endpoint: JACKAL_RPC_URL,
+            endpoint: JACKAL_WS_URL,
             gasMultiplier: 1.0,
           },
           'jackaltest': {
             chainId: mainnetChainID,
-            endpoint: JACKAL_RPC_URL,
+            endpoint: JACKAL_WS_URL,
             gasMultiplier: 1.0,
           },
           'jackallocal': {
             chainId: mainnetChainID,
-            endpoint: JACKAL_RPC_URL,
+            endpoint: JACKAL_WS_URL,
             gasMultiplier: 1.0,
           },
           'archway': {
             chainId: mainnetChainID,
-            endpoint: JACKAL_RPC_URL,
+            endpoint: JACKAL_WS_URL,
             gasMultiplier: 1.0,
           },
           'archwaytest': {
             chainId: mainnetChainID,
-            endpoint: JACKAL_RPC_URL,
+            endpoint: JACKAL_WS_URL,
             gasMultiplier: 1.0,
           },
           'wasm': {
             chainId: mainnetChainID,
-            endpoint: JACKAL_RPC_URL,
+            endpoint: JACKAL_WS_URL,
             gasMultiplier: 1.0,
           },
         }
@@ -157,19 +185,18 @@ export class localJjs {
     }
   }
 
-  private async dataFromCache(source: string): Promise<Uint8Array> {
-    const buffer = await wasabiClient.downloadFile(source)
-    return new Uint8Array(buffer)
-  }
 
   async downloadCAFFromJackal(cafFileName: string, outputPath: string): Promise<void> {
     try {
       // Download the file from Jackal storage
       const filePath = `${this.workingHome}/${cafFileName}`
+
       console.log(`Downloading CAF from Jackal: ${filePath}`)
       
       // Create a tracker for download progress
       const tracker = { progress: 0, chunks: [] }
+
+      // await this.sH.loadDirectory({ path: `${this.workingHome}` })
       
       // Download the file from Jackal
       console.log(`Starting download from Jackal storage handler...`)

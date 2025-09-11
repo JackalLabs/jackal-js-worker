@@ -24,6 +24,14 @@ The JS Worker now includes an Express web server that provides HTTP endpoints fo
   - `filePath`: The path of the file within the CAF bundle
 - Returns: JSON with file metadata
 
+### File Proof Information
+- **GET** `/file-proof/:taskId/:filePath`
+- Returns proof information about a file for verification purposes
+- Parameters:
+  - `taskId`: The task ID associated with the file
+  - `filePath`: The path of the file within the CAF bundle
+- Returns: JSON with file metadata and proof information including hashes and verification data
+
 ## Configuration
 
 The web server port is automatically calculated based on the worker ID:
@@ -41,6 +49,9 @@ curl http://localhost:6701/health
 
 # Get file info
 curl http://localhost:6701/file-info/task123/path/to/file.txt
+
+# Get file proof info
+curl http://localhost:6701/file-proof/task123/path/to/file.txt
 
 # Download file
 curl -O http://localhost:6701/file/task123/path/to/file.txt

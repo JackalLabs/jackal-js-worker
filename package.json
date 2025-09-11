@@ -17,13 +17,14 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.815.0",
-    "@jackallabs/jackal.js": "^3.7.1",
+    "@jackallabs/jackal.js": "file:jackallabs-jackal.js-3.7.1.tgz",
     "@types/express": "^4.17.23",
     "@types/pg": "^8.15.5",
     "amqplib": "^0.10.7",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@btmills/prettier": "^3.3.3",
