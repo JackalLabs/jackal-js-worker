@@ -80,12 +80,14 @@ export async function initJackal() {
       jkl1esjprqperjzwspaz6er7azzgqkvsa6n5kljv05: "https://mprov02.jackallabs.io",
       jkl1we8sne2wyjgjer4mv39wlqy7d0dkpm7x46d67k: "https://jackal-storage4.badgerbite.io",
       jkl1t4gwhkx67dq0p8hv2le0ua3nl6hdgf5ghz58pn: "https://jackal-storage3.badgerbite.io",
+      jkl1hlkjz02467kuwd0wdnkduzugxahzcckjwp5q9x: "https://jackal-storage0.badgerbite.io	",
       jkl1zud9vd0340ut5pyngtg0aenfrvkdtzyy4au6he: "https://jackal.nodesferatu.site",
-      jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
-      jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "https://jklstorage2.squirrellogic.com",
-      jkl1x6ekn8382nlmv04pedzev4hmc6jq8vypcc6fln: "https://jklstorage3.squirrellogic.com",
-      jkl1p4ft2z2cl3w70j4ec6e3tgcy2enuuehyjdfefw: "https://jklstorage4.squirrellogic.com",
-      jkl1hcrdcd2xr9yfx76rerfj2yyxynpm9je5ht29dn: "https://jklstorage5.squirrellogic.com",
+      jkl1jd2canwzed3klvua8sefh08wymrhq6je0vv4la: "https://jackal.nodesferatu.site",
+      // jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
+      // jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "https://jklstorage2.squirrellogic.com",
+      // jkl1x6ekn8382nlmv04pedzev4hmc6jq8vypcc6fln: "https://jklstorage3.squirrellogic.com",
+      // jkl1p4ft2z2cl3w70j4ec6e3tgcy2enuuehyjdfefw: "https://jklstorage4.squirrellogic.com",
+      // jkl1hcrdcd2xr9yfx76rerfj2yyxynpm9je5ht29dn: "https://jklstorage5.squirrellogic.com",
     }
 
     await storageHandler.loadProviderPool(initPool)
