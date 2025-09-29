@@ -35,7 +35,7 @@ class SimpleCAFProcessor {
     this.jjs = jjs
     this.workerId = process.env.JACKAL_WORKER_ID || '1'
     console.log(`Worker ID: ${this.workerId}`)
-    console.log(`CAF timeout: ${CAF_TIMEOUT_MINUTES} minutes`)
+    // console.log(`CAF timeout: ${CAF_TIMEOUT_MINUTES} minutes`)
   }
 
   /**
@@ -49,7 +49,7 @@ class SimpleCAFProcessor {
 
     // Set new timeout
     this.cafTimeout = setTimeout(async () => {
-      console.log(`CAF timeout reached (${CAF_TIMEOUT_MINUTES} minutes), finalizing CAF...`)
+      // console.log(`CAF timeout reached (${CAF_TIMEOUT_MINUTES} minutes), finalizing CAF...`)
       if (this.currentCAF && this.currentChannel) {
         console.log('Finalizing CAF due to timeout...')
         await this.finalizeAndUploadCAF(this.currentChannel)
@@ -58,7 +58,7 @@ class SimpleCAFProcessor {
       }
     }, CAF_TIMEOUT_MINUTES * 60 * 1000) // Convert minutes to milliseconds
 
-    console.log(`CAF timeout started: ${CAF_TIMEOUT_MINUTES} minutes`)
+    // console.log(`CAF timeout started: ${CAF_TIMEOUT_MINUTES} minutes`)
   }
 
 
@@ -69,7 +69,7 @@ class SimpleCAFProcessor {
     if (this.cafTimeout) {
       clearTimeout(this.cafTimeout)
       this.cafTimeout = null
-      console.log('CAF timeout cleared')
+      //console.log('CAF timeout cleared')
     }
   }
 
@@ -79,7 +79,7 @@ class SimpleCAFProcessor {
   public cleanup(): void {
     this.clearCAFTimeout()
     this.currentChannel = null
-    console.log('CAF processor cleaned up')
+    //console.log('CAF processor cleaned up')
   }
 
   async processMessage(msg: amqp.Message, channel: amqp.Channel): Promise<void> {
@@ -104,14 +104,14 @@ class SimpleCAFProcessor {
 
       this.processingMessages.push({msg, taskId, filePath})
 
-      console.log(`Processing: ${filePath}`)
+      // console.log(`Processing: ${filePath}`)
 
       // Download file stream from Wasabi
-      console.log(`Downloading file from Wasabi: ${filePath}`)
+      // console.log(`Downloading file from Wasabi: ${filePath}`)
       const streamResult = await wasabiClient.downloadFileStream(filePath)
       stream = streamResult.stream
       const { contentLength } = streamResult
-      console.log(`Downloaded file: ${filePath} (${contentLength} bytes)`)
+      // console.log(`Downloaded file: ${filePath} (${contentLength} bytes)`)
      
       stream.on('end', () => {
         //console.log(`Main: Stream ended for ${filePath}`);
@@ -138,14 +138,14 @@ class SimpleCAFProcessor {
       if (added) {
         // File added successfully - reset the timeout timer
         // console.log(`Added file to CAF: ${cafFileName} (${contentLength} bytes)`)
-        // console.log(`CAF current size: ${this.currentCAF.getCurrentSize()} bytes`)
+        // // console.log(`CAF current size: ${this.currentCAF.getCurrentSize()} bytes`)
         
         // Reset the timeout timer since we just added a file
         this.startCAFTimeout()
         
         // Check if CAF is full
         if (this.currentCAF.getCurrentSize() >= this.currentCAF.getMaxSize()) {
-          console.log('CAF is full, finalizing and uploading...')
+          //console.log('CAF is full, finalizing and uploading...')
           await this.finalizeAndUploadCAF(channel)
         } else {
           // Acknowledge message
@@ -153,7 +153,7 @@ class SimpleCAFProcessor {
         }
       } else {
         // CAF full - finalize current and start new
-        console.log('CAF full, finalizing current and starting new...')
+        //console.log('CAF full, finalizing current and starting new...')
         await this.finalizeAndUploadCAF(channel)
         
         // Start new CAF and add the file
@@ -200,7 +200,7 @@ class SimpleCAFProcessor {
     try {
       // Finalize the CAF archive
       const cafPath = await currentCAF.finalize()
-      console.log(`CAF archive finalized: ${cafPath}`)
+      // console.log(`CAF archive finalized: ${cafPath}`)
       console.log(`Archive contains ${currentCAF.getFileList().length} files`)
 
 
@@ -218,11 +218,11 @@ class SimpleCAFProcessor {
 
       // Upload CAF to Jackal
       await this.jjs.uploadCAFToJackal(cafFileName, cafPath)
-      console.log(`CAF uploaded to Jackal: ${cafFileName}`)
+      // console.log(`CAF uploaded to Jackal: ${cafFileName}`)
 
       // Save to database (we'll need to track files that were added)
       // For now, just log success
-      console.log(`CAF processing complete: ${cafFileName}`)
+      // console.log(`CAF processing complete: ${cafFileName}`)
 
       // Clean up local file
       await this.cleanupCAF(cafPath)

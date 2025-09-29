@@ -178,7 +178,7 @@ export class WebServer {
 
         // Download the CAF bundle from Jackal
         const cafPath = await this.downloadCAFFromJackal(jackalFile.bundle_id)
-        console.log(`CAF downloaded to: ${cafPath}`)
+        // console.log(`CAF downloaded to: ${cafPath}`)
         
         // Extract the specific file from the CAF
         const fileContent = await this.extractFileFromCAF(cafPath, filePath, taskId)
@@ -335,16 +335,16 @@ export class WebServer {
     try {
       const stats = await fs.stat(tempCafPath)
       if (stats.isFile() && stats.size > 0) {
-        console.log(`CAF file already exists locally: ${tempCafPath} (${stats.size} bytes)`)
+        // console.log(`CAF file already exists locally: ${tempCafPath} (${stats.size} bytes)`)
         return tempCafPath
       } else {
-        console.log(`CAF file exists but is empty or invalid, will re-download: ${tempCafPath}`)
+        // console.log(`CAF file exists but is empty or invalid, will re-download: ${tempCafPath}`)
         // Remove the invalid file
         await fs.unlink(tempCafPath)
       }
     } catch (error) {
       // File doesn't exist, which is expected for new downloads
-      console.log(`CAF file not found locally, will download: ${tempCafPath}`)
+      // console.log(`CAF file not found locally, will download: ${tempCafPath}`)
     }
     
     console.log(`Downloading CAF from Jackal: ${tempCafPath}`)
@@ -372,7 +372,7 @@ export class WebServer {
         const testCaf = new CAFDeserializer(tempCafPath)
         await testCaf.loadIndex()
         const fileCount = testCaf.getFileList().length
-        console.log(`CAF validation successful: ${fileCount} files in archive`)
+        // console.log(`CAF validation successful: ${fileCount} files in archive`)
       } catch (validationError) {
         console.error(`CAF validation failed:`, validationError)
         throw new Error(`Downloaded CAF file is corrupted: ${validationError}`)
@@ -399,10 +399,10 @@ export class WebServer {
       
       const caf = new CAFDeserializer(cafPath)
       await caf.loadIndex()
-      console.log(`CAF index loaded successfully`)
+      // console.log(`CAF index loaded successfully`)
       
       const fileList = caf.getFileList()
-      console.log(`CAF contains ${fileList.length} files:`, fileList)
+      // console.log(`CAF contains ${fileList.length} files:`, fileList)
       
       // The file in CAF has the task ID prepended, so construct the full path
       const fullFilePath = `${taskId}/${targetFilePath}`
