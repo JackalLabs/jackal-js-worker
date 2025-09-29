@@ -82,7 +82,7 @@ export class WasabiClient {
    */
   async downloadFile(filePath: string): Promise<Buffer> {
     const sanitizedPath = sanitizeS3Path(filePath)
-    console.log(`Downloading file from Wasabi bucket=${this.bucket} key=${sanitizedPath} (original: ${filePath})`)
+    // console.log(`Downloading file from Wasabi bucket=${this.bucket} key=${sanitizedPath} (original: ${filePath})`)
     
     try {
       const command = new GetObjectCommand({
@@ -107,7 +107,7 @@ export class WasabiClient {
       }
 
       const buffer = Buffer.concat(chunks)
-      console.log(`Successfully downloaded file: ${sanitizedPath}`)
+      // console.log(`Successfully downloaded file: ${sanitizedPath}`)
       return buffer
     } catch (error) {
       console.error(`Failed to download file from bucket=${this.bucket} key=${sanitizedPath} endpoint=${this.client.config.endpoint}:`, error)
@@ -122,7 +122,7 @@ export class WasabiClient {
    */
   async downloadFileStream(filePath: string): Promise<{stream: NodeJS.ReadableStream, contentLength: number}> {
     const sanitizedPath = sanitizeS3Path(filePath)
-    console.log(`Downloading file stream from Wasabi bucket=${this.bucket} key=${sanitizedPath} (original: ${filePath})`)
+    // console.log(`Downloading file stream from Wasabi bucket=${this.bucket} key=${sanitizedPath} (original: ${filePath})`)
     
     try {
       const command = new GetObjectCommand({
@@ -139,7 +139,7 @@ export class WasabiClient {
       const contentLength = response.ContentLength || 0
       
       // Create a true streaming implementation that reads chunks on-demand
-      console.log(`Creating streaming reader for: ${sanitizedPath}`)
+      // console.log(`Creating streaming reader for: ${sanitizedPath}`)
       
       const { Readable } = await import('stream')
       const webStream = response.Body.transformToWebStream()
@@ -214,9 +214,9 @@ export class WasabiClient {
       }
       
       const stream = new AWSStreamReader(reader)
-      console.log(`Stream created, will read chunks on-demand: ${sanitizedPath}`)
+      // console.log(`Stream created, will read chunks on-demand: ${sanitizedPath}`)
       
-      console.log(`Successfully created file stream: ${sanitizedPath} (${contentLength} bytes)`)
+      // console.log(`Successfully created file stream: ${sanitizedPath} (${contentLength} bytes)`)
       return { stream, contentLength }
     } catch (error) {
       console.error(`Failed to download file stream from bucket=${this.bucket} key=${sanitizedPath} endpoint=${this.client.config.endpoint}:`, error)

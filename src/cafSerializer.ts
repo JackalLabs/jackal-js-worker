@@ -100,17 +100,17 @@ export class CAFSerializer {
    * @returns Promise<boolean> - true if file was added, false if it would exceed chunk size
    */
   public async addFileFromStream(filePath: string, stream: NodeJS.ReadableStream, contentLength: number): Promise<boolean> {
-    console.log(`CAF: Starting to add file stream: ${filePath} (${contentLength} bytes)`)
-    console.log(`CAF: Current position: ${this.currentPosition}, Max size: ${this.maxChunkSize}`)
+    //console.log(`CAF: Starting to add file stream: ${filePath} (${contentLength} bytes)`)
+    //console.log(`CAF: Current position: ${this.currentPosition}, Max size: ${this.maxChunkSize}`)
     
     // Check if adding this file would exceed the chunk size limit
     if (this.currentPosition + contentLength > this.maxChunkSize) {
-      console.log(`CAF: File ${filePath} would exceed size limit (${this.currentPosition + contentLength} > ${this.maxChunkSize})`)
+      //console.log(`CAF: File ${filePath} would exceed size limit (${this.currentPosition + contentLength} > ${this.maxChunkSize})`)
       return false;
     }
 
     const startByte = this.currentPosition;
-    console.log(`CAF: Adding file ${filePath} at position ${startByte}`)
+    //console.log(`CAF: Adding file ${filePath} at position ${startByte}`)
     
     return new Promise<boolean>((resolve, reject) => {
       let bytesReceived = 0;
@@ -149,7 +149,7 @@ export class CAFSerializer {
         // Only log progress every 5 seconds
         if (now - lastProgressUpdate >= progressInterval) {
           const progress = ((bytesReceived / contentLength) * 100).toFixed(1);
-          console.log(`CAF: Streaming ${filePath}: ${bytesReceived}/${contentLength} bytes (${progress}%)`);
+          //console.log(`CAF: Streaming ${filePath}: ${bytesReceived}/${contentLength} bytes (${progress}%)`);
           lastProgressUpdate = now;
         }
         
@@ -167,8 +167,8 @@ export class CAFSerializer {
         const duration = Date.now() - startTime;
         const throughput = (contentLength / 1024 / 1024) / (duration / 1000); // MB/s
         
-        console.log(`CAF: Finished streaming ${filePath} in ${duration}ms (${throughput.toFixed(2)} MB/s)`);
-        console.log(`CAF: File added to index: ${startByte} to ${endByte}`);
+        //console.log(`CAF: Finished streaming ${filePath} in ${duration}ms (${throughput.toFixed(2)} MB/s)`);
+        //console.log(`CAF: File added to index: ${startByte} to ${endByte}`);
         
         // Add to index
         this.fileIndex[filePath] = {
@@ -177,7 +177,7 @@ export class CAFSerializer {
         };
 
         this.currentPosition = endByte;
-        console.log(`CAF: New position: ${this.currentPosition}`);
+        //console.log(`CAF: New position: ${this.currentPosition}`);
         
         cleanup();
         resolve(true);
@@ -222,7 +222,7 @@ export class CAFSerializer {
       };
 
       // Pipe the stream directly to the CAF write stream
-      console.log(`CAF: Starting pipe for ${filePath}`);
+      //console.log(`CAF: Starting pipe for ${filePath}`);
       if (this.writeStream && !this.writeStream.destroyed) {
         // Add error handler to writeStream
         this.writeStream.once('error', onWriteStreamError);
@@ -230,7 +230,7 @@ export class CAFSerializer {
         
         
         stream.on('end', () => {
-          console.log(`CAF: Stream ended for ${filePath}`);
+          //console.log(`CAF: Stream ended for ${filePath}`);
           this.writeStream.removeListener('error', onWriteStreamError);
         });
         
@@ -242,16 +242,16 @@ export class CAFSerializer {
         });
         
         stream.on('close', () => {
-          console.log(`CAF: Stream closed for ${filePath}`);
+          //console.log(`CAF: Stream closed for ${filePath}`);
         });
         
         // Handle pipe completion and errors
         stream.pipe(this.writeStream, { end: false });
-        console.log(`CAF: Pipe established for ${filePath}, waiting for data...`);
+        //console.log(`CAF: Pipe established for ${filePath}, waiting for data...`);
         
         // Add a check to see if the stream is already ended
         if ('readableEnded' in stream && stream.readableEnded) {
-          console.log(`CAF: Stream already ended for ${filePath}`);
+          //console.log(`CAF: Stream already ended for ${filePath}`);
           cleanup();
           resolve(true);
           return;
@@ -269,7 +269,7 @@ export class CAFSerializer {
         const readable = 'readable' in stream ? stream.readable : 'unknown';
         const destroyed = 'destroyed' in stream ? stream.destroyed : 'unknown';
         const readableEnded = 'readableEnded' in stream ? stream.readableEnded : 'unknown';
-        console.log(`CAF: Stream state for ${filePath}: readable=${readable}, destroyed=${destroyed}, readableEnded=${readableEnded}`);
+        //console.log(`CAF: Stream state for ${filePath}: readable=${readable}, destroyed=${destroyed}, readableEnded=${readableEnded}`);
         
       } else {
         cleanup();
@@ -306,9 +306,9 @@ export class CAFSerializer {
    * Finalizes the CAF archive by writing the index and footer
    */
   public async finalize(): Promise<string> {
-    console.log(`CAF: Starting finalization of ${this.outputPath}`)
-    console.log(`CAF: Final size: ${this.currentPosition} bytes`)
-    console.log(`CAF: Total files: ${Object.keys(this.fileIndex).length}`)
+    //console.log(`CAF: Starting finalization of ${this.outputPath}`)
+    //console.log(`CAF: Final size: ${this.currentPosition} bytes`)
+    //console.log(`CAF: Total files: ${Object.keys(this.fileIndex).length}`)
     
     return new Promise<string>((resolve, reject) => {
       // Create the index
@@ -321,7 +321,7 @@ export class CAFSerializer {
       const indexBuffer = Buffer.from(indexJson, 'utf8');
       const indexSize = indexBuffer.length;
       
-      console.log(`CAF: Index size: ${indexSize} bytes`);
+      //console.log(`CAF: Index size: ${indexSize} bytes`);
 
       // Check if stream is still valid
       if (!this.writeStream || this.writeStream.destroyed) {
@@ -353,8 +353,8 @@ export class CAFSerializer {
           }
 
           this.writeStream.end(() => {
-            console.log(`CAF: Successfully finalized ${this.outputPath}`)
-            console.log(`CAF: Final archive size: ${this.currentPosition + indexSize + 4} bytes`)
+            //console.log(`CAF: Successfully finalized ${this.outputPath}`)
+            //console.log(`CAF: Final archive size: ${this.currentPosition + indexSize + 4} bytes`)
             
             // Clean up the stream after finalization is complete
             if (this.writeStream && !this.writeStream.destroyed) {

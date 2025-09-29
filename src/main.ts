@@ -114,7 +114,7 @@ class SimpleCAFProcessor {
       console.log(`Downloaded file: ${filePath} (${contentLength} bytes)`)
      
       stream.on('end', () => {
-        console.log(`Main: Stream ended for ${filePath}`);
+        //console.log(`Main: Stream ended for ${filePath}`);
       });
       
       stream.on('error', (error) => {
@@ -137,8 +137,8 @@ class SimpleCAFProcessor {
 
       if (added) {
         // File added successfully - reset the timeout timer
-        console.log(`Added file to CAF: ${cafFileName} (${contentLength} bytes)`)
-        console.log(`CAF current size: ${this.currentCAF.getCurrentSize()} bytes`)
+        // console.log(`Added file to CAF: ${cafFileName} (${contentLength} bytes)`)
+        // console.log(`CAF current size: ${this.currentCAF.getCurrentSize()} bytes`)
         
         // Reset the timeout timer since we just added a file
         this.startCAFTimeout()
@@ -162,7 +162,7 @@ class SimpleCAFProcessor {
         const newStream = streamResult2.stream
         const { contentLength: newContentLength } = streamResult2
         await this.currentCAF.addFileFromStream(cafFileName, newStream, newContentLength)
-        console.log(`Added file to new CAF: ${cafFileName} (${newContentLength} bytes)`)
+        // console.log(`Added file to new CAF: ${cafFileName} (${newContentLength} bytes)`)
         
         // Start timeout timer for new CAF
         this.startCAFTimeout()
