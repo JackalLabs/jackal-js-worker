@@ -82,11 +82,11 @@ export async function initJackal() {
       // jkl1t4gwhkx67dq0p8hv2le0ua3nl6hdgf5ghz58pn: "https://jackal-storage3.badgerbite.io",
       // jkl1hlkjz02467kuwd0wdnkduzugxahzcckjwp5q9x: "https://jackal-storage0.badgerbite.io",
       jkl1zud9vd0340ut5pyngtg0aenfrvkdtzyy4au6he: "https://jackal.nodesferatu.site",
-      jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "http://sl-jklprov-1.prod.squirrellogic.com",
-      jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "http://sl-jklprov-2.prod.squirrellogic.com",
-      jkl1x6ekn8382nlmv04pedzev4hmc6jq8vypcc6fln: "http://sl-jklprov-3.prod.squirrellogic.com",
-      jkl1p4ft2z2cl3w70j4ec6e3tgcy2enuuehyjdfefw: "http://sl-jklprov-4.prod.squirrellogic.com",
-      jkl1hcrdcd2xr9yfx76rerfj2yyxynpm9je5ht29dn: "http://sl-jklprov-5.prod.squirrellogic.com",
+      jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "http://sl-jklprov-1.prod.squirrellogic.com:3333",
+      jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "http://sl-jklprov-2.prod.squirrellogic.com:3333",
+      jkl1x6ekn8382nlmv04pedzev4hmc6jq8vypcc6fln: "http://sl-jklprov-3.prod.squirrellogic.com:3333",
+      jkl1p4ft2z2cl3w70j4ec6e3tgcy2enuuehyjdfefw: "http://sl-jklprov-4.prod.squirrellogic.com:3333",
+      jkl1hcrdcd2xr9yfx76rerfj2yyxynpm9je5ht29dn: "http://sl-jklprov-5.prod.squirrellogic.com:3333",
     }
 
     await storageHandler.loadProviderPool(initPool)
